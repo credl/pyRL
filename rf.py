@@ -1,6 +1,7 @@
 # Needed for training the network
 import os
 import sys
+import keyboard
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
@@ -9,6 +10,9 @@ import tensorflow.keras.initializers as initializers
 
 # Needed for animation
 import matplotlib.pyplot as plt
+
+width=50
+height=50
 
 def construct_q_network(state_dim: int, action_dim: int) -> keras.Model:
     """Construct the critic network with q-values per action as output"""
@@ -38,30 +42,38 @@ def mean_squared_error_loss(q_value: tf.Tensor, reward: tf.Tensor) -> tf.Tensor:
     return loss
 
 def get_next_state(state, action):
-    x = state[0,0].numpy()
-    y = state[0,1].numpy()
+    ax = state[0,0].numpy()
+    ay = state[0,1].numpy()
+    px = state[0,2].numpy()
+    py = state[0,3].numpy()
     if action == 0:
-        x = x - 1
+        ax = max(0, ax - 1)
     elif action == 1:
-        x = x + 1
+        ax = min(width - 1, ax + 1)
     elif action == 2:
-        y = y - 1
+        ay = max(0, ay - 1)
     elif action == 3:
-        y = y + 1
-    ret = tf.constant([[x,y]])
+        ay = min(height - 1, ay + 1)
+    ret = tf.constant([[ax,ay,px,py]])
     return ret
 
 def get_reward(state, action):
     succ_state = get_next_state(state, action)
-    x = succ_state[0,0].numpy()
-    y = succ_state[0,1].numpy()
-    reward = [-abs(0 - x) - abs(0 - y) + - 3 * abs(150 - x) - 3 * abs(150 - y)]
+    ax = state[0,0].numpy()
+    ay = state[0,1].numpy()
+    px = state[0,2].numpy()
+    py = state[0,3].numpy()
+    # try to stay at player's position
+    #reward = [-abs(ax - px) - abs(ay - py)]
+    reward = [-abs(25 - ax) - abs(25 - ay)]
     return reward
 
 def format_state(state):
-    x = state[0,0].numpy()
-    y = state[0,1].numpy()
-    return "{}".format(x) + "/" + "{}".format(y)
+    ax = state[0,0].numpy()
+    ay = state[0,1].numpy()
+    px = state[0,2].numpy()
+    py = state[0,3].numpy()
+    return "{}".format(ax) + "/" + "{}".format(ay) + ", " + "{}".format(px) + "/" + "{}".format(py)
 
 def format_step(state, action):
     succ_state = get_next_state(state, action)
@@ -69,23 +81,29 @@ def format_step(state, action):
     return "(" + format_state(state) + " -> " + format_state(succ_state) + ", A: " + "{}".format(action) + ", R:" + "{}".format(reward) + ")"
 
 def visualizefield(state):
-    x = state[0,0].numpy()
-    y = state[0,1].numpy()
+    ax = state[0,0].numpy()
+    ay = state[0,1].numpy()
+    px = state[0,2].numpy()
+    py = state[0,3].numpy()
     over = 0
     str = ""
-    for yc in range(-20, 20):
+    for yc in range(0,height):
         over = 0
-        for xc in range(-20, 20):
-            if xc == round(x / 10) and yc == round(y / 10):
-                statestr = format_state(state)
-                str = str + "x" + statestr
-                over = len(statestr)
+        for xc in range(0, width):
+            if xc == ax and yc == ay:
+                #statestr = format_state(state)
+                str = str + "x" #+ statestr
+                #over = len(statestr)
+            elif xc == px and yc == py:
+                #statestr = format_state(state)
+                str = str + "@" #+ statestr
+                #over = len(statestr)
             else:
                 if over == 0:
-                    if yc == -20 or yc == 19 or xc == -20 or xc == 19:
+                    if yc == 0 or yc == height - 1 or xc == 0 or xc == width - 1:
                         str = str + "#"
                     elif xc == 0 and yc == 0:
-                        str = str + "0"
+                        str = str + "."
                     else:
                         str = str + " "
                 else:
@@ -93,66 +111,71 @@ def visualizefield(state):
         str = str + "\n"
     #os.system('cls')
     sys.stdout.write(str)
-
+    
+def update_state_by_user_input(state):
+    ax = state[0,0].numpy()
+    ay = state[0,1].numpy()
+    px = state[0,2].numpy()
+    py = state[0,3].numpy()
+    if keyboard.is_pressed('a'):
+        px = max(px - 1, 0)
+    if keyboard.is_pressed('d'):
+        px = min(px + 1, width - 1)
+    if keyboard.is_pressed('w'):
+        py = max(py - 1, 0)
+    if keyboard.is_pressed('s'):
+        py = min(py + 1, height - 1)
+    return tf.constant([[ax,ay,px,py]])
+ 
 if __name__ == "__main__":
-    # Initialize parameters
-    state = tf.constant([[1,1]]) # tf.constant([[1]])
-    bandits = np.array([0.9, 1.2, 0.7, 1.0])
-    state_dim = 2
-    action_dim = len(bandits)
+
+    # hyperparameters
+    action_dim = 4
     exploration_rate = 0.1
     learning_rate = 0.01
     num_episodes = 1000000
-    alpha = 0.9
+    alpha = 0.1
     gamma = 0.0
+    succ_state = tf.constant([[0,0,10,10]])
+    state_dim = 4
 
-    # Construct Q-network
+    # construct q-network
     q_network = construct_q_network(state_dim, action_dim)
-
-    # Define optimizer
     opt = tf.keras.optimizers.Adam(learning_rate=learning_rate)
     
-    succ_state = tf.constant([[0,0]])
-    for i in range(num_episodes + 1):
+    i = 0
+    while True:
+        i = i + 1
         with tf.GradientTape() as tape:
-            # define current state
+            # define current state and obtain q values (estimated by NN)
             state = succ_state
-            
-            # Obtain Q-values from network
+            state = update_state_by_user_input(state)
             q_values = q_network(state)
 
+            # choose action
             epsilon = np.random.rand()
             if epsilon <= exploration_rate:
-                # Select random action
-                action = np.random.choice(len(bandits))
+                action = np.random.choice(action_dim)
             else:
-                # Select action with highest q-value
                 action = np.argmax(q_values)
 
-            # go to successor state and obtain reward from bandit
-            old_state = state
+            # go to successor state and obtain reward
             succ_state = get_next_state(state, action)
-
             succ_state_q_values = q_network(succ_state)
             reward = get_reward(state, action)
-            
-            if i % 1 == 0:
+
+            # visualize
+            if i % 100 == 0:
                 visualizefield(succ_state)
                 sys.stdout.write(format_step(state, action))
                 sys.stdout.write("\n")
                 sys.stdout.flush()
 
-            # Obtain Q-value
+            # update q-value
             q_value = q_values[0, action]
+            new_q_value = q_value + alpha * (reward + gamma * max(succ_state_q_values) - q_value)
 
-            # compute new q value
-            new_q_value = q_value - alpha * (reward + gamma * max(succ_state_q_values) - q_value)
-
-            # Compute loss value
+            # compute loss value and do NN learn
             loss_value = mean_squared_error_loss(q_value, new_q_value)
-
-            # Compute gradients
             grads = tape.gradient(loss_value[0], q_network.trainable_variables)
-
-            # Apply gradients to update network weights
             opt.apply_gradients(zip(grads, q_network.trainable_variables))
