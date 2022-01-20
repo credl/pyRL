@@ -177,7 +177,7 @@ def game_loop(main_window):
             
             # visualize
             if step % print_interval == 0:
-                visualizefield(main_window, succ_state)
+                main_window.write_event_value("redraw", succ_state)
                 #sys.stdout.write(format_step(state, action))
                 #sys.stdout.write("\n")
                 #print(trainingsample, "chosen action:", action_name(action), ", direct reward:", reward)
@@ -208,4 +208,7 @@ if __name__ == "__main__":
         if event == sg.WIN_CLOSED:
             abort = True
             break
+        elif event == "redraw":
+            if not abort:
+                visualizefield(main_window, values["redraw"])
     gl.join()
