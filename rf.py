@@ -1,4 +1,3 @@
-# Needed for training the network
 import os
 import sys
 import keyboard
@@ -11,9 +10,6 @@ import tensorflow.keras as keras
 import tensorflow.keras.layers as layers
 import tensorflow.keras.initializers as initializers
 
-# Needed for animation
-import matplotlib.pyplot as plt
-
 class RL:
     abort=False
     ax_idx=0
@@ -23,6 +19,7 @@ class RL:
     width=50
     height=50
     box_size=10
+    have_frozen_state=False
     frozen_state=0
 
     def construct_q_network(self, state_dim: int, action_dim: int) -> keras.Model:
@@ -77,9 +74,7 @@ class RL:
 
     def get_reward(self, state, action):
         succ_state = self.get_next_state(state, action)
-        # try to stay at player's position
-        #reward = [-abs(ax - px) - abs(ay - py)]
-        #reward = -succ_state[ax_idx] + succ_state[ay_idx]
+        #reward = succ_state[self.ax_idx] + succ_state[self.ay_idx]
         reward = -abs(25 - succ_state[self.ax_idx]) - abs(25 - succ_state[self.ay_idx])
         return reward
 
@@ -114,16 +109,19 @@ class RL:
     def game_loop(self, main_window):
         # hyperparameters
         action_dim = 4
-        exploration_rate = 0.1
+        exploration_rate_start = 1.0
+        exploration_rate = exploration_rate_start
+        exploration_rate_decrease = 0.00001
         learning_rate = 0.01
-        num_episodes = 1000000
-        alpha = 0.10
-        gamma = 0.99
-        succ_state = [0, 0, 10, 10]
+        num_epochs = 100
+        alpha = 1.00
+        gamma = 0.0
+        succ_state = [0, 0, 0, 0]
         state_dim = 4
         print_interval = 1
-        max_sample_storage = 10000
-        training_interval = 1000
+        max_sample_storage = 2000
+        training_interval = 100
+        sample_size = 10
 
         # construct q-network
         q_network = self.construct_q_network(state_dim, action_dim)
@@ -131,6 +129,7 @@ class RL:
         q_network.compile(opt, loss="mse")
         
         trainingset = list()
+        t_trainingset = list()
         step = 0
         while not self.abort:
             step = step + 1
@@ -140,6 +139,7 @@ class RL:
                 # define current state and obtain q values (estimated by NN)
                 state = succ_state
                 self.frozen_state = state
+                self.have_frozen_state = True
                 state = self.update_state_by_user_input(state)
                 q_values = q_network(tf.constant([state]))
 
@@ -149,6 +149,9 @@ class RL:
                     action = np.random.choice(action_dim)
                 else:
                     action = np.argmax(q_values)
+                exploration_rate = exploration_rate - exploration_rate_decrease
+                if exploration_rate < 0:
+                    exploration_rate = 0
 
                 # go to successor state and obtain reward
                 succ_state = self.get_next_state(state, action)
@@ -162,35 +165,25 @@ class RL:
 
                 # store observation in training set
                 trainingsample = (tuple(state), action, tuple(succ_state), tuple(succ_state_q_values))
-                #trainingsample = tf.constant(state, succ_state_q_values)
-                #trainingsample = tf.constant([state, succ_state_q_values])
-                #print("T", tensor)
-                if len(trainingset) >= max_sample_storage:
-                    trainingset[random.randint(0, max_sample_storage - 1)] = trainingsample
-                else:
-                    trainingset.append(trainingsample)
+                t_trainingsample = [state, succ_state_q_values]
+                while len(trainingset) >= max_sample_storage:
+                    del trainingset[0]
+                    del t_trainingset[0]
+                trainingset.append(trainingsample)
+                t_trainingset.append(t_trainingsample)
 
                 # compute loss value and do NN learn
                 if step % training_interval == 0:
-                    #loss_value = mean_squared_error_loss(q_value, new_q_value)
-                    sample = random.sample(trainingset, min(len(trainingset), 10))
+                    sample = random.sample(trainingset, min(len(trainingset), sample_size))
                     inp = tf.constant([ list(s) for (s, a, ss, q) in sample ])
                     out = tf.constant([ list(q) for (s, a, ss, q) in sample ])
-                    #q_network.fit(inp, out)
+
+                    t_sample = tf.constant(random.sample(t_trainingset, min(len(trainingset), 10)))
+                    inp = tf.reshape(tf.gather(t_sample, [0], axis=1), [t_sample.shape[0], 4])
+                    out = tf.reshape(tf.gather(t_sample, [1], axis=1), [t_sample.shape[0], 4])
+                    q_network.fit(inp, out, epochs=num_epochs)
+                    print("Exploration rate:", exploration_rate)
                 
-                # visualize
-    #            if step % print_interval == 0:
-    #                main_window.write_event_value("redraw", succ_state)
-                    #sys.stdout.write(format_step(state, action))
-                    #sys.stdout.write("\n")
-                    #print(trainingsample, "chosen action:", action_name(action), ", direct reward:", reward)
-                    #sys.stdout.flush()
-                    #main_window["-CANV-"].update()
-
-                #q_network.fit()
-                #grads = tape.gradient(loss_value[0], q_network.trainable_variables)
-                #opt.apply_gradients(zip(grads, q_network.trainable_variables))
-
     def run(self):
         self.abort = False
         main_window = sg.Window(title="RL",layout = [
@@ -212,7 +205,7 @@ class RL:
                 self.abort = True
                 break
             else:
-                if self.frozen_state is not 0:
+                if self.have_frozen_state:
                     self.visualizefield(main_window, self.frozen_state)
                 if keyboard.is_pressed('Esc'):
                     main_window.close()
