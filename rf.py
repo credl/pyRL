@@ -22,6 +22,7 @@ py_idx=3
 width=50
 height=50
 box_size=10
+global_state=0
 
 def construct_q_network(state_dim: int, action_dim: int) -> keras.Model:
     """Construct the critic network with q-values per action as output"""
@@ -91,12 +92,19 @@ def format_step(state, action):
 
 def visualizefield(main_window, state):
     #main_window["-CANV-"].DrawRectangle((0, 0), (width * box_size, height * box_size), fill_color="white")
+    print("#0")
     main_window["-CANV-"].DrawRectangle((0 * box_size, 0 * box_size), (width * box_size - 1, 1 * box_size - 1), fill_color="black")
+    print("#")
     main_window["-CANV-"].DrawRectangle((0 * box_size, (height - 1) * box_size), (width * box_size - 1, height * box_size - 1), fill_color="black")
+    print("#")
     main_window["-CANV-"].DrawRectangle((0 * box_size, 0 * box_size), (1 * box_size - 1, height * box_size - 1), fill_color="black")
+    print("#")
     main_window["-CANV-"].DrawRectangle(((width - 1) * box_size, 0 * box_size), (width * box_size - 1, height * box_size - 1), fill_color="black")
+    print("#")
     main_window["-CANV-"].DrawRectangle((state[ax_idx] * box_size, state[ay_idx] * box_size), ((state[ax_idx] + 1) * box_size - 1, (state[ay_idx] + 1) * box_size - 1), fill_color="red")
+    print("#")
     main_window["-CANV-"].DrawRectangle((state[px_idx] * box_size, state[py_idx] * box_size), ((state[px_idx] + 1) * box_size - 1, (state[py_idx] + 1) * box_size - 1), fill_color="yellow")
+    print("###")
     
 def update_state_by_user_input(state):
     if keyboard.is_pressed('a'):
@@ -130,13 +138,14 @@ def game_loop(main_window):
     
     trainingset = list()
     step = 0
-    while True:
+    while not abort:
         step = step + 1
         if abort:
             break
         with tf.GradientTape() as tape:
             # define current state and obtain q values (estimated by NN)
             state = succ_state
+            global_state = state
             state = update_state_by_user_input(state)
             q_values = q_network(tf.constant([state]))
 
@@ -176,8 +185,8 @@ def game_loop(main_window):
                 #q_network.fit(inp, out)
             
             # visualize
-            if step % print_interval == 0:
-                main_window.write_event_value("redraw", succ_state)
+#            if step % print_interval == 0:
+#                main_window.write_event_value("redraw", succ_state)
                 #sys.stdout.write(format_step(state, action))
                 #sys.stdout.write("\n")
                 #print(trainingsample, "chosen action:", action_name(action), ", direct reward:", reward)
@@ -187,6 +196,7 @@ def game_loop(main_window):
             #q_network.fit()
             #grads = tape.gradient(loss_value[0], q_network.trainable_variables)
             #opt.apply_gradients(zip(grads, q_network.trainable_variables))
+    print("eot")
 
 if __name__ == "__main__":
     abort = False
@@ -204,11 +214,13 @@ if __name__ == "__main__":
     gl = threading.Thread(target=game_loop, args=(main_window,))
     gl.start()
     while True:
-        event, values = main_window.read()
+        event, values = main_window.read(timeout=100)
         if event == sg.WIN_CLOSED:
             abort = True
             break
-        elif event == "redraw":
-            if not abort:
-                visualizefield(main_window, values["redraw"])
-    gl.join()
+#        elif event == "redraw":
+ #           if not abort:
+        else:
+            if global_state is not 0:
+                visualizefield(main_window, state)
+#    gl.join()
