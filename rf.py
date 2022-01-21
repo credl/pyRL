@@ -26,13 +26,13 @@ class RL:
         """Construct the critic network with q-values per action as output"""
         inputs = layers.Input(shape=(state_dim,))  # input dimension
         hidden1 = layers.Dense(
-            10, activation="relu", kernel_initializer=initializers.he_normal()
+            10, activation="relu", kernel_initializer=initializers.he_normal() # he_normal
         )(inputs)
         hidden2 = layers.Dense(
-            10, activation="relu", kernel_initializer=initializers.he_normal()
+            10, activation="relu", kernel_initializer=initializers.he_normal() # he_normal
         )(hidden1)
         hidden3 = layers.Dense(
-            10, activation="relu", kernel_initializer=initializers.he_normal()
+            10, activation="relu", kernel_initializer=initializers.he_normal() # he_normal
         )(hidden2)
         q_values = layers.Dense(
             action_dim, kernel_initializer=initializers.Zeros(), activation="linear"
@@ -100,6 +100,33 @@ class RL:
         main_window["-CANV-"].DrawRectangle((state[self.ax_idx] * self.box_size, state[self.ay_idx] * self.box_size), ((state[self.ax_idx] + 1) * self.box_size - 1, (state[self.ay_idx] + 1) * self.box_size - 1), fill_color="red")
         main_window["-CANV-"].DrawRectangle((state[self.px_idx] * self.box_size, state[self.py_idx] * self.box_size), ((state[self.px_idx] + 1) * self.box_size - 1, (state[self.py_idx] + 1) * self.box_size - 1), fill_color="yellow")
         
+    def simulate_user_input(self, state):
+        if state[self.px_idx] == 0:
+            # go up at left edge
+            if state[self.py_idx] > 0:
+                state[self.py_idx] = state[self.py_idx] - 1
+            else:
+                state[self.px_idx] = state[self.px_idx] + 1
+        elif state[self.py_idx] == 0:
+            # go right at top edge
+            if state[self.px_idx] < self.width - 1:
+                state[self.px_idx] = state[self.px_idx] + 1
+            else:
+                state[self.py_idx] = state[self.py_idx] + 1
+        elif state[self.px_idx] == self.width - 1:
+            # go down at right edge
+            if state[self.py_idx] < self.height - 1:
+                state[self.py_idx] = state[self.py_idx] + 1
+            else:
+                state[self.px_idx] = state[self.px_idx] - 1
+        elif state[self.py_idx] == self.height - 1:
+            # go left at bottom edge
+            if state[self.px_idx] > 0:
+                state[self.px_idx] = state[self.px_idx] - 1
+            else:
+                state[self.py_idx] = state[self.py_idx] - 1
+        return state
+
     def update_state_by_user_input(self, state):
         if keyboard.is_pressed('a'):
             state[self.px_idx] = state[self.px_idx] = max(state[self.px_idx] - 1, 0)
@@ -138,17 +165,18 @@ class RL:
         action_dim = 4
         exploration_rate_start = 1.0
         exploration_rate = exploration_rate_start
-        exploration_rate_decrease = 0.00001
+        exploration_rate_decrease = 0.001
         learning_rate = 0.01
-        num_epochs = 1
+        num_epochs = 10
         alpha = 0.9
         gamma = 0.0
         succ_state = [0, 0, 0, 0]
         state_dim = 4
         print_interval = 1
         max_sample_storage = 100
-        training_interval = 100
+        training_interval = 10
         sample_size = 100
+        explore_all_actions = True
 
         # construct q-network
         q_network = self.construct_q_network(state_dim, action_dim)
@@ -168,6 +196,7 @@ class RL:
                 self.frozen_state = state
                 self.have_frozen_state = True
                 state = self.update_state_by_user_input(state)
+                #state = self.simulate_user_input(state)
                 q_values = q_network(tf.constant([state]))[0].numpy()
 
                 # choose action
@@ -180,18 +209,27 @@ class RL:
                 if exploration_rate < 0:
                     exploration_rate = 0
 
-                # go to successor state and obtain reward
-                succ_state = self.get_next_state(state, action)
-                succ_state_q_values = q_network(tf.constant([succ_state]))[0].numpy()
-                reward = self.get_reward(state, action)
+                if explore_all_actions:
+                    action_range = list(range(0, action_dim))
+                    action_range.remove(action)
+                    action_range.append(action)
+                else:
+                    action_range = range(action, action + 1)
+                for hypothetical_action in action_range:
+                    # go to successor state and obtain reward
+                    succ_state = self.get_next_state(state, hypothetical_action)
+                    succ_state_q_values = q_network(tf.constant([succ_state]))[0].numpy()
+                    reward = self.get_reward(state, hypothetical_action)
 
-                # update q-value
-                q_value = q_values[action]
-                new_q_value = q_value + alpha * (reward + gamma * max(succ_state_q_values) - q_value)
-                q_values[action] = new_q_value
+                    # update q-value
+                    q_value = q_values[hypothetical_action]
+                    new_q_value = q_value + alpha * (reward + gamma * max(succ_state_q_values) - q_value)
+                    q_values[hypothetical_action] = new_q_value
 
                 # store observation in training set
                 #trainingsample = (tuple(state), action, tuple(succ_state), tuple(succ_state_q_values))
+                #print("INP:",state,", AC:",action,", OUT:",q_values,", CORR:",self.is_correct_decision(state, np.argmax(q_values)))
+                #print(exploration_rate)
                 t_trainingsample = [state, q_values]
                 while len(t_trainingset) >= max_sample_storage:
                     #del trainingset[0]
