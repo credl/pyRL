@@ -73,9 +73,14 @@ class RL:
         return state
 
     def get_reward(self, state, action):
+        #if self.is_correct_decision(state, action):
+        #    return 10
+        #else:
+        #    return 0
+    
         succ_state = self.get_next_state(state, action)
         #reward = succ_state[self.ax_idx] + succ_state[self.ay_idx]
-        reward = -abs(25 - succ_state[self.ax_idx]) - abs(25 - succ_state[self.ay_idx])
+        reward =  50 -abs(25 - succ_state[self.ax_idx]) - abs(25 - succ_state[self.ay_idx])
         return reward
 
     def format_state(self, state):
@@ -106,6 +111,28 @@ class RL:
             state[self.py_idx] = min(state[self.py_idx] + 1, self.height - 1)
         return state
 
+    def is_correct_decision(self, state, action):
+        if action == 0:
+            return state[self.ax_idx] >= 25
+        if action == 1:
+            return state[self.ax_idx] <= 25
+        if action == 2:
+            return state[self.ay_idx] >= 25
+        if action == 3:
+            return state[self.ay_idx] <= 25
+        return False
+    
+    def is_trainingsample_correct(self, t_trainingsample):
+        (state, q_values) = t_trainingsample
+        return self.is_correct_decision(state, np.argmax(q_values))
+    
+    def show_correct_samples(self, t_trainingset):
+        correct = 0
+        for t_trainingsample in t_trainingset:
+            if self.is_trainingsample_correct(t_trainingsample):
+                correct = correct + 1
+        print((correct * 100 / len(t_trainingset)), "% decisions in training set correct")
+
     def game_loop(self, main_window):
         # hyperparameters
         action_dim = 4
@@ -113,15 +140,15 @@ class RL:
         exploration_rate = exploration_rate_start
         exploration_rate_decrease = 0.00001
         learning_rate = 0.01
-        num_epochs = 100
-        alpha = 1.00
+        num_epochs = 1
+        alpha = 0.9
         gamma = 0.0
         succ_state = [0, 0, 0, 0]
         state_dim = 4
         print_interval = 1
-        max_sample_storage = 2000
-        training_interval = 1000
-        sample_size = 100
+        max_sample_storage = 100
+        training_interval = 100
+        sample_size = 10
 
         # construct q-network
         q_network = self.construct_q_network(state_dim, action_dim)
@@ -141,7 +168,7 @@ class RL:
                 self.frozen_state = state
                 self.have_frozen_state = True
                 state = self.update_state_by_user_input(state)
-                q_values = q_network(tf.constant([state]))
+                q_values = q_network(tf.constant([state]))[0].numpy()
 
                 # choose action
                 epsilon = np.random.rand()
@@ -159,18 +186,19 @@ class RL:
                 reward = self.get_reward(state, action)
 
                 # update q-value
-                q_value = q_values[0, action].numpy()
+                q_value = q_values[action]
                 new_q_value = q_value + alpha * (reward + gamma * max(succ_state_q_values) - q_value)
-                succ_state_q_values[action] = new_q_value
+                q_values[action] = new_q_value
 
                 # store observation in training set
                 #trainingsample = (tuple(state), action, tuple(succ_state), tuple(succ_state_q_values))
-                t_trainingsample = [state, succ_state_q_values]
+                t_trainingsample = [state, q_values]
                 while len(t_trainingset) >= max_sample_storage:
                     #del trainingset[0]
                     del t_trainingset[0]
                 #trainingset.append(trainingsample)
                 t_trainingset.append(t_trainingsample)
+                #print("State:", state, ", Action:", action, ", Reward:", reward, ", qvalue[", action, "]:", new_q_value, ", qvalues:", q_values, ", correct:", self.is_trainingsample_correct(t_trainingsample))
 
                 # compute loss value and do NN learn
                 if step % training_interval == 0:
@@ -178,11 +206,17 @@ class RL:
                     #inp = tf.constant([ list(s) for (s, a, ss, q) in sample ])
                     #out = tf.constant([ list(q) for (s, a, ss, q) in sample ])
 
-                    t_sample = tf.constant(random.sample(t_trainingset, min(len(t_trainingset), 10)))
+                    if sample_size == -1:
+                        # take only most recent training sample
+                        t_sample = tf.constant([t_trainingsample])
+                    else:
+                        t_sample = tf.constant(random.sample(t_trainingset, min(len(t_trainingset), sample_size)))
                     inp = tf.reshape(tf.gather(t_sample, [0], axis=1), [t_sample.shape[0], 4])
                     out = tf.reshape(tf.gather(t_sample, [1], axis=1), [t_sample.shape[0], 4])
                     q_network.fit(inp, out, epochs=num_epochs)
-                    print("Exploration rate:", exploration_rate)
+                    #print("Exploration rate:", exploration_rate)
+                    
+                    self.show_correct_samples(t_trainingset)
                 
     def run(self):
         self.abort = False
