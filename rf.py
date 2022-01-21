@@ -148,7 +148,7 @@ class RL:
         print_interval = 1
         max_sample_storage = 100
         training_interval = 100
-        sample_size = 10
+        sample_size = 100
 
         # construct q-network
         q_network = self.construct_q_network(state_dim, action_dim)
