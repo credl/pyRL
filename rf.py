@@ -120,8 +120,8 @@ class RL:
         state_dim = 4
         print_interval = 1
         max_sample_storage = 2000
-        training_interval = 100
-        sample_size = 10
+        training_interval = 1000
+        sample_size = 100
 
         # construct q-network
         q_network = self.construct_q_network(state_dim, action_dim)
@@ -164,21 +164,21 @@ class RL:
                 succ_state_q_values[action] = new_q_value
 
                 # store observation in training set
-                trainingsample = (tuple(state), action, tuple(succ_state), tuple(succ_state_q_values))
+                #trainingsample = (tuple(state), action, tuple(succ_state), tuple(succ_state_q_values))
                 t_trainingsample = [state, succ_state_q_values]
-                while len(trainingset) >= max_sample_storage:
-                    del trainingset[0]
+                while len(t_trainingset) >= max_sample_storage:
+                    #del trainingset[0]
                     del t_trainingset[0]
-                trainingset.append(trainingsample)
+                #trainingset.append(trainingsample)
                 t_trainingset.append(t_trainingsample)
 
                 # compute loss value and do NN learn
                 if step % training_interval == 0:
-                    sample = random.sample(trainingset, min(len(trainingset), sample_size))
-                    inp = tf.constant([ list(s) for (s, a, ss, q) in sample ])
-                    out = tf.constant([ list(q) for (s, a, ss, q) in sample ])
+                    #sample = random.sample(trainingset, min(len(trainingset), sample_size))
+                    #inp = tf.constant([ list(s) for (s, a, ss, q) in sample ])
+                    #out = tf.constant([ list(q) for (s, a, ss, q) in sample ])
 
-                    t_sample = tf.constant(random.sample(t_trainingset, min(len(trainingset), 10)))
+                    t_sample = tf.constant(random.sample(t_trainingset, min(len(t_trainingset), 10)))
                     inp = tf.reshape(tf.gather(t_sample, [0], axis=1), [t_sample.shape[0], 4])
                     out = tf.reshape(tf.gather(t_sample, [1], axis=1), [t_sample.shape[0], 4])
                     q_network.fit(inp, out, epochs=num_epochs)
