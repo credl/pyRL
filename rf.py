@@ -167,15 +167,17 @@ class RL:
         exploration_rate = exploration_rate_start
         exploration_rate_decrease = 0.0001
         learning_rate = 0.01
-        num_epochs = 10
+        num_epochs = 100
         alpha = 1.0
-        gamma = 0.0
-        succ_state = [0, 0, 0, 0]
+        gamma = 0.1
+        succ_state = [25, 25, 0, 0]
         state_dim = 4
         print_interval = 1
-        max_sample_storage = 1000
-        training_interval = 10
-        sample_size = 10
+        max_sample_storage = 10000
+        training_interval = 1000
+        sample_size = 100
+        sliding_corr_pred = []
+        train = True
 
         # construct q-network
         q_network = self.construct_q_network(state_dim, action_dim)
@@ -194,13 +196,13 @@ class RL:
             state = succ_state
             self.frozen_state = state
             self.have_frozen_state = True
-            #state = self.update_state_by_user_input(state)
+            state = self.update_state_by_user_input(state)
             state = self.simulate_user_input(state)
             q_values = q_network(tf.constant([state]))[0].numpy()
 
             # choose action
             epsilon = np.random.rand()
-            if epsilon <= exploration_rate:
+            if epsilon < exploration_rate:
                 action = np.random.choice(action_dim)
             else:
                 action = np.argmax(q_values)
@@ -221,7 +223,7 @@ class RL:
             t_replaybuffer.append(t_trainingsample)
 
             # training
-            if step % training_interval == 0:
+            if train and step % training_interval == 0:
                 if sample_size == -1:
                     # take only most recent training sample
                     t_samples = [t_trainingsample]
@@ -238,15 +240,17 @@ class RL:
                     t_action = t_sample[1]
                     t_succ_state = t_sample[2]
                     t_reward = t_sample[3]
+                    
+                    # predict q-values by NN
                     t_state_q_values = q_network(tf.constant([t_state]))[0].numpy()
                     t_succ_state_q_values = q_network(tf.constant([t_succ_state]))[0].numpy()
 
-                    # update q-value (Bellman equation)
-#                    print("Updating:", t_state, t_action, t_succ_state, t_reward, t_state_q_values)
+                    # update q-value of chosen action (Bellman equation)
                     old_q = t_state_q_values[t_action]
                     t_state_q_values[t_action] = t_state_q_values[t_action] + alpha * (t_reward + gamma * max(t_succ_state_q_values) - t_state_q_values[t_action])
-                    rew_inc = (t_state_q_values[t_action] - old_q)
 
+                    # quality check
+#                    rew_inc = (t_state_q_values[t_action] - old_q)
                     if self.is_correct_decision(t_state, np.argmax(t_state_q_values)):
                         pred_corr += 1
 #                        if rew_inc > 0:
@@ -265,11 +269,14 @@ class RL:
                     inp.append(t_state)
                     out.append(t_state_q_values)
 
-                q_network.fit(np.asarray(inp), np.asarray(out), epochs=num_epochs, verbose=0)
+                q_network.fit(np.asarray(inp), np.asarray(out), epochs=num_epochs, verbose=0, shuffle=True)
+                sliding_corr_pred.append(pred_corr / len(t_samples))
                 self.print_progress_bar(pred_corr * 100 / len(t_samples))
-                #print("Exploration rate:", exploration_rate)
-                
-                #self.show_correct_samples(t_replaybuffer)
+                if (sum(sliding_corr_pred[-5:]) / 5 > 0.98):
+                    print("Stopping training due to good accuracy")
+                    train = False
+                    exploration_rate = 0
+                    
 
     def print_progress_bar(self, percentage):
         str = "|"
