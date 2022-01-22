@@ -11,16 +11,31 @@ import tensorflow.keras.layers as layers
 import tensorflow.keras.initializers as initializers
 
 class RL:
-    abort=False
-    ax_idx=0
-    ay_idx=1
-    px_idx=2
-    py_idx=3
-    width=50
-    height=50
-    box_size=10
-    have_frozen_state=False
-    frozen_state=0
+    abort = False
+    
+    # meaning of state dimensions
+    ax_idx = 0
+    ay_idx = 1
+    px_idx = 2
+    py_idx = 3
+    
+    # action space
+    action_dim = 4
+
+    # environment space
+    width = 50
+    height = 50
+    box_size = 10
+    
+    # visualization
+    have_frozen_state = False
+    frozen_state = 0
+    
+    # training control
+    train = True
+    
+    # quality ensurance
+    sliding_corr_pred = []
 
     def construct_q_network(self, state_dim: int, action_dim: int) -> keras.Model:
         """Construct the critic network with q-values per action as output"""
@@ -31,23 +46,16 @@ class RL:
         hidden2 = layers.Dense(
             10, activation="relu", kernel_initializer=initializers.he_normal() # he_normal
         )(hidden1)
-        hidden3 = layers.Dense(
-            10, activation="relu", kernel_initializer=initializers.he_normal() # he_normal
-        )(hidden2)
+#        hidden3 = layers.Dense(
+#            10, activation="relu", kernel_initializer=initializers.he_normal() # he_normal
+#        )(hidden2)
         q_values = layers.Dense(
             action_dim, kernel_initializer=initializers.Zeros(), activation="linear"
-        )(hidden3)
+        )(hidden2)
 
         deep_q_network = keras.Model(inputs=inputs, outputs=[q_values])
 
         return deep_q_network
-
-
-    def mean_squared_error_loss(self, q_value: tf.Tensor, reward: tf.Tensor) -> tf.Tensor:
-        """Compute mean squared error loss"""
-        loss = 0.5 * (q_value - reward) ** 2
-
-        return loss
 
     def get_next_state(self, state, action):
         succ_state = np.array(state)
@@ -73,12 +81,15 @@ class RL:
         return state
 
     def get_reward(self, state, action):
-        #if self.is_correct_decision(state, action):
-        #    return 10
-        #else:
-        #    return 0
-    
         succ_state = self.get_next_state(state, action)
+        
+        if abs(25 - succ_state[self.ax_idx]) < 5 and abs(25 - succ_state[self.ay_idx]) < 5: #abs( #self.is_correct_decision(state, action):
+            return 50
+        elif abs(25 - succ_state[self.ax_idx]) < 15 and abs(25 - succ_state[self.ay_idx]) < 15: #abs( #self.is_correct_decision(state, action):
+            return 10
+        else:
+            return 0
+    
         #reward = succ_state[self.ax_idx] + succ_state[self.ay_idx]
         reward =  50 -abs(25 - succ_state[self.ax_idx]) - abs(25 - succ_state[self.ay_idx])
         return reward
@@ -162,27 +173,23 @@ class RL:
 
     def game_loop(self, main_window):
         # hyperparameters
-        action_dim = 4
         exploration_rate_start = 1.0
         exploration_rate = exploration_rate_start
         exploration_rate_decrease = 0.0001
         learning_rate = 0.01
-        num_epochs = 100
-        alpha = 1.0
-        gamma = 0.1
         succ_state = [25, 25, 0, 0]
         state_dim = 4
-        print_interval = 1
-        max_sample_storage = 10000
-        training_interval = 1000
-        sample_size = 100
-        sliding_corr_pred = []
-        train = True
+        max_sample_storage = 10
+        training_interval = 1
+        accept_q_network_interval = 20
 
         # construct q-network
-        q_network = self.construct_q_network(state_dim, action_dim)
+        self.t_network = self.construct_q_network(state_dim, self.action_dim)
+        self.q_network = self.construct_q_network(state_dim, self.action_dim)
         opt = tf.keras.optimizers.Adam(learning_rate=learning_rate)
-        q_network.compile(opt, loss="mse")
+        self.t_network.compile(opt, loss="mse")
+        self.q_network.compile(opt, loss="mse")
+        self.copy_weights(self.q_network, self.t_network)
         
         trainingset = list()
         t_replaybuffer = list()
@@ -197,18 +204,18 @@ class RL:
             self.frozen_state = state
             self.have_frozen_state = True
             state = self.update_state_by_user_input(state)
-            state = self.simulate_user_input(state)
-            q_values = q_network(tf.constant([state]))[0].numpy()
+            #state = self.simulate_user_input(state)
+            q_values = self.q_network(tf.constant([state]))[0].numpy()
 
             # choose action
             epsilon = np.random.rand()
-            if epsilon < exploration_rate:
-                action = np.random.choice(action_dim)
+            if self.train and epsilon < exploration_rate:
+                action = np.random.choice(self.action_dim)
             else:
                 action = np.argmax(q_values)
             
             # decrease random choices over time
-            exploration_rate = exploration_rate - exploration_rate_decrease
+            exploration_rate -= exploration_rate_decrease
             if exploration_rate < 0:
                 exploration_rate = 0
 
@@ -223,59 +230,67 @@ class RL:
             t_replaybuffer.append(t_trainingsample)
 
             # training
-            if train and step % training_interval == 0:
-                if sample_size == -1:
-                    # take only most recent training sample
-                    t_samples = [t_trainingsample]
-                else:
-                    # draw random training samples from replay buffer
-                    t_samples = random.sample(t_replaybuffer, min(len(t_replaybuffer), sample_size))
+            if self.train and step % training_interval == 0:
+                self.train(t_replaybuffer)
+            if self.train and step % accept_q_network_interval == 0:
+                print("Accepting q network as target. Exploration rate:", exploration_rate)
+                self.copy_weights(self.q_network, self.t_network)
 
-                # get current q-values (current NN prediction) of selected training samples and update them according to observed reward
-                inp = []
-                out = []
-                pred_corr = 0
-                for t_sample in t_samples:
-                    t_state = t_sample[0]
-                    t_action = t_sample[1]
-                    t_succ_state = t_sample[2]
-                    t_reward = t_sample[3]
-                    
-                    # predict q-values by NN
-                    t_state_q_values = q_network(tf.constant([t_state]))[0].numpy()
-                    t_succ_state_q_values = q_network(tf.constant([t_succ_state]))[0].numpy()
+    def copy_weights(self, nn_source, nn_target):
+        nn_target.set_weights(nn_source.get_weights())
+                
+    def train(self, t_replaybuffer):
+        # hyperparameters
+        sample_size = -1
+        #num_epochs = 100
+        alpha = 1.0
+        gamma = 0.9
 
-                    # update q-value of chosen action (Bellman equation)
-                    old_q = t_state_q_values[t_action]
-                    t_state_q_values[t_action] = t_state_q_values[t_action] + alpha * (t_reward + gamma * max(t_succ_state_q_values) - t_state_q_values[t_action])
+        if sample_size < 0:
+            # take only most recent training sample
+            t_samples = t_replaybuffer[sample_size:]
+        else:
+            # draw random training samples from replay buffer
+            t_samples = random.sample(t_replaybuffer, min(len(t_replaybuffer), sample_size))
 
-                    # quality check
-#                    rew_inc = (t_state_q_values[t_action] - old_q)
-                    if self.is_correct_decision(t_state, np.argmax(t_state_q_values)):
-                        pred_corr += 1
-#                        if rew_inc > 0:
-#                            print("CORRECT REW CHANGE")
-#                        elif rew_inc < 0:
-#                            print("WRONG REW CHANGE")
-#                    else:
-#                        if rew_inc < 0:
-#                            print("CORRECT REW CHANGE")
-#                        elif rew_inc > 0:
-#                            print("WRONG REW CHANGE")
+        # get current q-values (current NN prediction) of selected training samples and update them according to observed reward
+        inp = []
+        out = []
+        pred_corr = 0
+        for t_sample in t_samples:
+            t_state = t_sample[0]
+            t_action = t_sample[1]
+            t_succ_state = t_sample[2]
+            t_reward = t_sample[3]
+            
+            # predict q-values by NN
+            t_state_q_values = self.q_network(tf.constant([t_state]))[0].numpy()
+            t_succ_state_q_values = self.t_network(tf.constant([t_succ_state]))[0].numpy()
 
-#                    print("Result:", t_state, t_action, t_succ_state, t_reward, t_state_q_values, ", REW-INC:", rew_inc)
-                    
-                    # build training batch
-                    inp.append(t_state)
-                    out.append(t_state_q_values)
+            # update q-value of chosen action (Bellman equation)
+            old_q = t_state_q_values[t_action]
+            t_state_q_values[t_action] = t_state_q_values[t_action] + alpha * (t_reward + gamma * max(t_succ_state_q_values) - t_state_q_values[t_action])
 
-                q_network.fit(np.asarray(inp), np.asarray(out), epochs=num_epochs, verbose=0, shuffle=True)
-                sliding_corr_pred.append(pred_corr / len(t_samples))
-                self.print_progress_bar(pred_corr * 100 / len(t_samples))
-                if (sum(sliding_corr_pred[-5:]) / 5 > 0.98):
-                    print("Stopping training due to good accuracy")
-                    train = False
-                    exploration_rate = 0
+            # quality check
+            if self.is_correct_decision(t_state, np.argmax(t_state_q_values)):
+                pred_corr += 1
+
+            # build training batch
+            #inp.append(t_state)
+            #out.append(t_state_q_values)
+            
+            # train on single instance
+            print("Fitting", "State", t_state, "Action", t_action, "Reward", t_reward, "Updated q value for action", t_state_q_values[t_action], "q values", t_state_q_values, "correctness", self.is_correct_decision(t_state, np.argmax(t_state_q_values)))
+            self.q_network.fit(tf.constant([t_state]), tf.constant([t_state_q_values]), epochs=1, verbose=0, shuffle=True)
+
+        #self.q_network.fit(np.asarray(inp), np.asarray(out), epochs=num_epochs, verbose=0, shuffle=True)
+        
+        self.sliding_corr_pred.append(pred_corr / len(t_samples))
+        print("Sliding training sample correctness:", sum(self.sliding_corr_pred[-50:]) / 50)
+        #self.print_progress_bar(pred_corr * 100 / len(t_samples))
+        #if (sum(self.sliding_corr_pred[-5:]) / 5 > 0.98):
+        #    print("Stopping training due to good accuracy")
+        #    self.train = False
                     
 
     def print_progress_bar(self, percentage):
