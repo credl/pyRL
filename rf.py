@@ -173,13 +173,13 @@ class RL:
 
     def game_loop(self, main_window):
         # hyperparameters
-        exploration_rate_start = 1.0
+        exploration_rate_start = 0.1
         exploration_rate = exploration_rate_start
-        exploration_rate_decrease = 0.0001
-        learning_rate = 0.01
+        exploration_rate_decrease = 0.0
+        learning_rate = 0.2
         succ_state = [25, 25, 0, 0]
         state_dim = 4
-        max_sample_storage = 10
+        max_sample_storage = 100
         training_interval = 1
         accept_q_network_interval = 20
 
@@ -206,6 +206,7 @@ class RL:
             state = self.update_state_by_user_input(state)
             #state = self.simulate_user_input(state)
             q_values = self.q_network(tf.constant([state]))[0].numpy()
+            print("Decision:", "S", state, "Q", q_values)
 
             # choose action
             epsilon = np.random.rand()
@@ -244,7 +245,7 @@ class RL:
         sample_size = -1
         #num_epochs = 100
         alpha = 1.0
-        gamma = 0.9
+        gamma = 0.6
 
         if sample_size < 0:
             # take only most recent training sample
@@ -280,7 +281,7 @@ class RL:
             #out.append(t_state_q_values)
             
             # train on single instance
-            print("Fitting", "State", t_state, "Action", t_action, "Reward", t_reward, "Updated q value for action", t_state_q_values[t_action], "q values", t_state_q_values, "correctness", self.is_correct_decision(t_state, np.argmax(t_state_q_values)))
+            #print("Fitting", "State", t_state, "Action", t_action, "Reward", t_reward, "Updated q value for action", t_state_q_values[t_action], "q values", t_state_q_values, "correctness", self.is_correct_decision(t_state, np.argmax(t_state_q_values)))
             self.q_network.fit(tf.constant([t_state]), tf.constant([t_state_q_values]), epochs=1, verbose=0, shuffle=True)
 
         #self.q_network.fit(np.asarray(inp), np.asarray(out), epochs=num_epochs, verbose=0, shuffle=True)
