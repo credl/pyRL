@@ -150,33 +150,32 @@ class RL:
         return False
     
     def is_trainingsample_correct(self, t_trainingsample):
-        (state, q_values) = t_trainingsample
-        return self.is_correct_decision(state, np.argmax(q_values))
+        (state, action, succ_state, reward) = t_trainingsample
+        return self.is_correct_decision(state, action)
     
-    def show_correct_samples(self, t_trainingset):
+    def show_correct_samples(self, t_replaybuffer):
         correct = 0
-        for t_trainingsample in t_trainingset:
+        for t_trainingsample in t_replaybuffer:
             if self.is_trainingsample_correct(t_trainingsample):
                 correct = correct + 1
-        print((correct * 100 / len(t_trainingset)), "% decisions in training set correct")
+        print((correct * 100 / len(t_replaybuffer)), "% decisions in training set correct")
 
     def game_loop(self, main_window):
         # hyperparameters
         action_dim = 4
         exploration_rate_start = 1.0
         exploration_rate = exploration_rate_start
-        exploration_rate_decrease = 0.001
+        exploration_rate_decrease = 0.0001
         learning_rate = 0.01
         num_epochs = 10
-        alpha = 0.9
+        alpha = 1.0
         gamma = 0.0
         succ_state = [0, 0, 0, 0]
         state_dim = 4
         print_interval = 1
-        max_sample_storage = 100
+        max_sample_storage = 1000
         training_interval = 10
-        sample_size = 100
-        explore_all_actions = True
+        sample_size = 10
 
         # construct q-network
         q_network = self.construct_q_network(state_dim, action_dim)
@@ -184,78 +183,108 @@ class RL:
         q_network.compile(opt, loss="mse")
         
         trainingset = list()
-        t_trainingset = list()
+        t_replaybuffer = list()
         step = 0
         while not self.abort:
             step = step + 1
             if self.abort:
                 break
-            with tf.GradientTape() as tape:
-                # define current state and obtain q values (estimated by NN)
-                state = succ_state
-                self.frozen_state = state
-                self.have_frozen_state = True
-                state = self.update_state_by_user_input(state)
-                #state = self.simulate_user_input(state)
-                q_values = q_network(tf.constant([state]))[0].numpy()
 
-                # choose action
-                epsilon = np.random.rand()
-                if epsilon <= exploration_rate:
-                    action = np.random.choice(action_dim)
+            # define current state and obtain q values (estimated by NN)
+            state = succ_state
+            self.frozen_state = state
+            self.have_frozen_state = True
+            #state = self.update_state_by_user_input(state)
+            state = self.simulate_user_input(state)
+            q_values = q_network(tf.constant([state]))[0].numpy()
+
+            # choose action
+            epsilon = np.random.rand()
+            if epsilon <= exploration_rate:
+                action = np.random.choice(action_dim)
+            else:
+                action = np.argmax(q_values)
+            
+            # decrease random choices over time
+            exploration_rate = exploration_rate - exploration_rate_decrease
+            if exploration_rate < 0:
+                exploration_rate = 0
+
+            # go to successor state and obtain reward
+            succ_state = self.get_next_state(state, action)
+            reward = self.get_reward(state, action)
+
+            # store current observation in training set
+            t_trainingsample = [state, action, succ_state, reward]
+            while len(t_replaybuffer) >= max_sample_storage:
+                del t_replaybuffer[0]
+            t_replaybuffer.append(t_trainingsample)
+
+            # training
+            if step % training_interval == 0:
+                if sample_size == -1:
+                    # take only most recent training sample
+                    t_samples = [t_trainingsample]
                 else:
-                    action = np.argmax(q_values)
-                exploration_rate = exploration_rate - exploration_rate_decrease
-                if exploration_rate < 0:
-                    exploration_rate = 0
+                    # draw random training samples from replay buffer
+                    t_samples = random.sample(t_replaybuffer, min(len(t_replaybuffer), sample_size))
 
-                if explore_all_actions:
-                    action_range = list(range(0, action_dim))
-                    action_range.remove(action)
-                    action_range.append(action)
-                else:
-                    action_range = range(action, action + 1)
-                for hypothetical_action in action_range:
-                    # go to successor state and obtain reward
-                    succ_state = self.get_next_state(state, hypothetical_action)
-                    succ_state_q_values = q_network(tf.constant([succ_state]))[0].numpy()
-                    reward = self.get_reward(state, hypothetical_action)
+                # get current q-values (current NN prediction) of selected training samples and update them according to observed reward
+                inp = []
+                out = []
+                pred_corr = 0
+                for t_sample in t_samples:
+                    t_state = t_sample[0]
+                    t_action = t_sample[1]
+                    t_succ_state = t_sample[2]
+                    t_reward = t_sample[3]
+                    t_state_q_values = q_network(tf.constant([t_state]))[0].numpy()
+                    t_succ_state_q_values = q_network(tf.constant([t_succ_state]))[0].numpy()
 
-                    # update q-value
-                    q_value = q_values[hypothetical_action]
-                    new_q_value = q_value + alpha * (reward + gamma * max(succ_state_q_values) - q_value)
-                    q_values[hypothetical_action] = new_q_value
+                    # update q-value (Bellman equation)
+#                    print("Updating:", t_state, t_action, t_succ_state, t_reward, t_state_q_values)
+                    old_q = t_state_q_values[t_action]
+                    t_state_q_values[t_action] = t_state_q_values[t_action] + alpha * (t_reward + gamma * max(t_succ_state_q_values) - t_state_q_values[t_action])
+                    rew_inc = (t_state_q_values[t_action] - old_q)
 
-                # store observation in training set
-                #trainingsample = (tuple(state), action, tuple(succ_state), tuple(succ_state_q_values))
-                #print("INP:",state,", AC:",action,", OUT:",q_values,", CORR:",self.is_correct_decision(state, np.argmax(q_values)))
-                #print(exploration_rate)
-                t_trainingsample = [state, q_values]
-                while len(t_trainingset) >= max_sample_storage:
-                    #del trainingset[0]
-                    del t_trainingset[0]
-                #trainingset.append(trainingsample)
-                t_trainingset.append(t_trainingsample)
-                #print("State:", state, ", Action:", action, ", Reward:", reward, ", qvalue[", action, "]:", new_q_value, ", qvalues:", q_values, ", correct:", self.is_trainingsample_correct(t_trainingsample))
+                    if self.is_correct_decision(t_state, np.argmax(t_state_q_values)):
+                        pred_corr += 1
+#                        if rew_inc > 0:
+#                            print("CORRECT REW CHANGE")
+#                        elif rew_inc < 0:
+#                            print("WRONG REW CHANGE")
+#                    else:
+#                        if rew_inc < 0:
+#                            print("CORRECT REW CHANGE")
+#                        elif rew_inc > 0:
+#                            print("WRONG REW CHANGE")
 
-                # compute loss value and do NN learn
-                if step % training_interval == 0:
-                    #sample = random.sample(trainingset, min(len(trainingset), sample_size))
-                    #inp = tf.constant([ list(s) for (s, a, ss, q) in sample ])
-                    #out = tf.constant([ list(q) for (s, a, ss, q) in sample ])
-
-                    if sample_size == -1:
-                        # take only most recent training sample
-                        t_sample = tf.constant([t_trainingsample])
-                    else:
-                        t_sample = tf.constant(random.sample(t_trainingset, min(len(t_trainingset), sample_size)))
-                    inp = tf.reshape(tf.gather(t_sample, [0], axis=1), [t_sample.shape[0], 4])
-                    out = tf.reshape(tf.gather(t_sample, [1], axis=1), [t_sample.shape[0], 4])
-                    q_network.fit(inp, out, epochs=num_epochs)
-                    #print("Exploration rate:", exploration_rate)
+#                    print("Result:", t_state, t_action, t_succ_state, t_reward, t_state_q_values, ", REW-INC:", rew_inc)
                     
-                    self.show_correct_samples(t_trainingset)
+                    # build training batch
+                    inp.append(t_state)
+                    out.append(t_state_q_values)
+
+                q_network.fit(np.asarray(inp), np.asarray(out), epochs=num_epochs, verbose=0)
+                self.print_progress_bar(pred_corr * 100 / len(t_samples))
+                #print("Exploration rate:", exploration_rate)
                 
+                #self.show_correct_samples(t_replaybuffer)
+
+    def print_progress_bar(self, percentage):
+        str = "|"
+        ch = 0
+        per = percentage
+        while (per >= 5):
+            str = str + "#"
+            per -= 5
+            ch += 1
+        while ch < 20:
+            str = str + "."
+            ch += 1
+        str += " |"
+        print(str, percentage)
+
     def run(self):
         self.abort = False
         main_window = sg.Window(title="RL",layout = [
