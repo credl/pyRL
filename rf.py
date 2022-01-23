@@ -46,12 +46,12 @@ class RL:
         hidden2 = layers.Dense(
             10, activation="relu", kernel_initializer=initializers.he_normal() # he_normal
         )(hidden1)
-#        hidden3 = layers.Dense(
-#            10, activation="relu", kernel_initializer=initializers.he_normal() # he_normal
-#        )(hidden2)
+        hidden3 = layers.Dense(
+            10, activation="relu", kernel_initializer=initializers.he_normal() # he_normal
+        )(hidden2)
         q_values = layers.Dense(
             action_dim, kernel_initializer=initializers.Zeros(), activation="linear"
-        )(hidden2)
+        )(hidden3)
 
         deep_q_network = keras.Model(inputs=inputs, outputs=[q_values])
 
@@ -83,12 +83,17 @@ class RL:
     def get_reward(self, state, action):
         succ_state = self.get_next_state(state, action)
         
-        if abs(25 - succ_state[self.ax_idx]) < 5 and abs(25 - succ_state[self.ay_idx]) < 5: #abs( #self.is_correct_decision(state, action):
+        if self.is_correct_decision(state, action):
             return 50
-        elif abs(25 - succ_state[self.ax_idx]) < 15 and abs(25 - succ_state[self.ay_idx]) < 15: #abs( #self.is_correct_decision(state, action):
-            return 10
         else:
             return 0
+        
+        #if abs(25 - succ_state[self.ax_idx]) < 5 and abs(25 - succ_state[self.ay_idx]) < 5: #abs( #self.is_correct_decision(state, action):
+        #    return 50
+        #elif abs(25 - succ_state[self.ax_idx]) < 15 and abs(25 - succ_state[self.ay_idx]) < 15: #abs( #self.is_correct_decision(state, action):
+        #    return 10
+        #else:
+        #    return 0
     
         #reward = succ_state[self.ax_idx] + succ_state[self.ay_idx]
         reward =  50 -abs(25 - succ_state[self.ax_idx]) - abs(25 - succ_state[self.ay_idx])
@@ -109,7 +114,7 @@ class RL:
         main_window["-CANV-"].DrawRectangle((0 * self.box_size, 0 * self.box_size), (1 * self.box_size - 1, self.height * self.box_size - 1), fill_color="black")
         main_window["-CANV-"].DrawRectangle(((self.width - 1) * self.box_size, 0 * self.box_size), (self.width * self.box_size - 1, self.height * self.box_size - 1), fill_color="black")
         main_window["-CANV-"].DrawRectangle((state[self.ax_idx] * self.box_size, state[self.ay_idx] * self.box_size), ((state[self.ax_idx] + 1) * self.box_size - 1, (state[self.ay_idx] + 1) * self.box_size - 1), fill_color="red")
-        main_window["-CANV-"].DrawRectangle((state[self.px_idx] * self.box_size, state[self.py_idx] * self.box_size), ((state[self.px_idx] + 1) * self.box_size - 1, (state[self.py_idx] + 1) * self.box_size - 1), fill_color="yellow")
+        #main_window["-CANV-"].DrawRectangle((state[self.px_idx] * self.box_size, state[self.py_idx] * self.box_size), ((state[self.px_idx] + 1) * self.box_size - 1, (state[self.py_idx] + 1) * self.box_size - 1), fill_color="yellow")
         
     def simulate_user_input(self, state):
         if state[self.px_idx] == 0:
@@ -151,14 +156,15 @@ class RL:
 
     def is_correct_decision(self, state, action):
         if action == 0:
-            return state[self.ax_idx] >= 25
-        if action == 1:
-            return state[self.ax_idx] <= 25
-        if action == 2:
-            return state[self.ay_idx] >= 25
-        if action == 3:
-            return state[self.ay_idx] <= 25
-        return False
+            return state[self.ax_idx] > 25
+        elif action == 1:
+            return state[self.ax_idx] < 25
+        elif action == 2:
+            return state[self.ay_idx] > 25
+        elif action == 3:
+            return state[self.ay_idx] < 25
+        else:
+            return False
     
     def is_trainingsample_correct(self, t_trainingsample):
         (state, action, succ_state, reward) = t_trainingsample
@@ -173,14 +179,14 @@ class RL:
 
     def game_loop(self, main_window):
         # hyperparameters
-        exploration_rate_start = 0.1
+        exploration_rate_start = 1.0
         exploration_rate = exploration_rate_start
-        exploration_rate_decrease = 0.0
-        learning_rate = 0.2
-        succ_state = [25, 25, 0, 0]
-        state_dim = 4
-        max_sample_storage = 100
-        training_interval = 1
+        exploration_rate_decrease = 0.001
+        learning_rate = 0.1
+        succ_state = [25, 25] #, 0, 0]
+        state_dim = 2
+        max_sample_storage = 10000
+        training_interval = 100
         accept_q_network_interval = 20
 
         # construct q-network
@@ -203,10 +209,10 @@ class RL:
             state = succ_state
             self.frozen_state = state
             self.have_frozen_state = True
-            state = self.update_state_by_user_input(state)
+            #state = self.update_state_by_user_input(state)
             #state = self.simulate_user_input(state)
             q_values = self.q_network(tf.constant([state]))[0].numpy()
-            print("Decision:", "S", state, "Q", q_values)
+            print("Decision:", "S", state, "Q", np.array_str(q_values, precision=2), "Best action by Q", self.action_name(np.argmax(q_values)))
 
             # choose action
             epsilon = np.random.rand()
@@ -216,9 +222,11 @@ class RL:
                 action = np.argmax(q_values)
             
             # decrease random choices over time
-            exploration_rate -= exploration_rate_decrease
-            if exploration_rate < 0:
-                exploration_rate = 0
+            if exploration_rate > 0:
+                exploration_rate -= exploration_rate_decrease
+                if exploration_rate < 0:
+                    exploration_rate = 0
+                    print("Stopping random choices")
 
             # go to successor state and obtain reward
             succ_state = self.get_next_state(state, action)
@@ -234,7 +242,7 @@ class RL:
             if self.train and step % training_interval == 0:
                 self.train(t_replaybuffer)
             if self.train and step % accept_q_network_interval == 0:
-                print("Accepting q network as target. Exploration rate:", exploration_rate)
+                #print("Accepting q network as target. Exploration rate:", exploration_rate)
                 self.copy_weights(self.q_network, self.t_network)
 
     def copy_weights(self, nn_source, nn_target):
@@ -242,10 +250,10 @@ class RL:
                 
     def train(self, t_replaybuffer):
         # hyperparameters
-        sample_size = -1
+        sample_size = 32
         #num_epochs = 100
         alpha = 1.0
-        gamma = 0.6
+        gamma = 0.0
 
         if sample_size < 0:
             # take only most recent training sample
@@ -253,6 +261,7 @@ class RL:
         else:
             # draw random training samples from replay buffer
             t_samples = random.sample(t_replaybuffer, min(len(t_replaybuffer), sample_size))
+        print("Training on", t_samples)
 
         # get current q-values (current NN prediction) of selected training samples and update them according to observed reward
         inp = []
@@ -266,6 +275,7 @@ class RL:
             
             # predict q-values by NN
             t_state_q_values = self.q_network(tf.constant([t_state]))[0].numpy()
+            original_t_state_q_values = np.array(t_state_q_values)
             t_succ_state_q_values = self.t_network(tf.constant([t_succ_state]))[0].numpy()
 
             # update q-value of chosen action (Bellman equation)
@@ -281,13 +291,14 @@ class RL:
             #out.append(t_state_q_values)
             
             # train on single instance
-            #print("Fitting", "State", t_state, "Action", t_action, "Reward", t_reward, "Updated q value for action", t_state_q_values[t_action], "q values", t_state_q_values, "correctness", self.is_correct_decision(t_state, np.argmax(t_state_q_values)))
+            print("Fitting", "State", t_state, "Action", self.action_name(t_action), "Reward", t_reward)
             self.q_network.fit(tf.constant([t_state]), tf.constant([t_state_q_values]), epochs=1, verbose=0, shuffle=True)
+            print("O", np.array_str(original_t_state_q_values, precision=2), "T", np.array_str(t_state_q_values, precision=2), "R", np.array_str(self.q_network(tf.constant([t_state]))[0].numpy(), precision=2), "correctness", self.is_correct_decision(t_state, np.argmax(t_state_q_values)))
 
         #self.q_network.fit(np.asarray(inp), np.asarray(out), epochs=num_epochs, verbose=0, shuffle=True)
         
         self.sliding_corr_pred.append(pred_corr / len(t_samples))
-        print("Sliding training sample correctness:", sum(self.sliding_corr_pred[-50:]) / 50)
+        #print("Sliding training sample correctness:", sum(self.sliding_corr_pred[-50:]) / 50)
         #self.print_progress_bar(pred_corr * 100 / len(t_samples))
         #if (sum(self.sliding_corr_pred[-5:]) / 5 > 0.98):
         #    print("Stopping training due to good accuracy")
@@ -335,4 +346,5 @@ class RL:
                     main_window.close()
 
 if __name__ == "__main__":
+    np.set_printoptions(formatter={'float': '{: .2f}'.format})
     RL().run()
