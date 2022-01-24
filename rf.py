@@ -4,6 +4,7 @@ import keyboard
 import random
 import threading
 import math
+from collections import deque
 import PySimpleGUI as sg
 import numpy as np
 import tensorflow as tf
@@ -39,23 +40,11 @@ class RL:
     sliding_corr_pred = []
 
     def construct_q_network(self, state_dim: int, action_dim: int) -> keras.Model:
-        """Construct the critic network with q-values per action as output"""
-        inputs = layers.Input(shape=(state_dim,))  # input dimension
-        hidden1 = layers.Dense(
-            10, activation="relu", kernel_initializer=initializers.he_normal() # he_normal
-        )(inputs)
-        hidden2 = layers.Dense(
-            10, activation="relu", kernel_initializer=initializers.he_normal() # he_normal
-        )(hidden1)
-        hidden3 = layers.Dense(
-            10, activation="relu", kernel_initializer=initializers.he_normal() # he_normal
-        )(hidden2)
-        q_values = layers.Dense(
-            action_dim, kernel_initializer=initializers.Zeros(), activation="linear"
-        )(hidden3)
-
-        deep_q_network = keras.Model(inputs=inputs, outputs=[q_values])
-
+        deep_q_network = keras.models.Sequential([
+            keras.layers.Dense(32, activation="elu", input_shape=(state_dim,)),
+            keras.layers.Dense(32, activation="elu"),
+            keras.layers.Dense(action_dim)
+        ])
         return deep_q_network
 
     def get_next_state(self, state, action):
@@ -157,13 +146,13 @@ class RL:
 
     def is_correct_decision(self, state, action):
         if action == 0:
-            return state[self.ax_idx] > 25
+            return state[self.ax_idx] > 40
         elif action == 1:
-            return state[self.ax_idx] < 25
+            return state[self.ax_idx] < 40
         elif action == 2:
-            return state[self.ay_idx] > 25
+            return state[self.ay_idx] > 40
         elif action == 3:
-            return state[self.ay_idx] < 25
+            return state[self.ay_idx] < 40
         else:
             return False
     
@@ -180,26 +169,26 @@ class RL:
 
     def game_loop(self, main_window):
         # hyperparameters
-        exploration_rate_start = 0.9
+        exploration_rate_start = 0.1
         exploration_rate = exploration_rate_start
-        exploration_rate_decrease = 0.00001
-        learning_rate = 0.1
+        exploration_rate_decrease = 0.0 #0001
+        nn_learning_rate = 0.1
         succ_state = [25, 25] #, 0, 0]
         state_dim = 2
-        max_sample_storage = 1000
-        training_interval = 100
+        max_sample_storage = 10000
+        training_interval = 10
         accept_q_network_interval = 10
 
         # construct q-network
         self.t_network = self.construct_q_network(state_dim, self.action_dim)
         self.q_network = self.construct_q_network(state_dim, self.action_dim)
-        opt = tf.keras.optimizers.Adam(learning_rate=learning_rate)
-        self.t_network.compile(opt, loss="mse")
-        self.q_network.compile(opt, loss="mse")
+        self.opt = tf.keras.optimizers.Adam(learning_rate=nn_learning_rate)
+        self.t_network.compile(self.opt, loss="mse")
+        self.q_network.compile(self.opt, loss="mse")
         self.copy_weights(self.q_network, self.t_network)
         
         trainingset = list()
-        t_replaybuffer = list()
+        t_replaybuffer = deque(maxlen=max_sample_storage)
         step = 0
         while not self.abort:
             step = step + 1
@@ -213,7 +202,7 @@ class RL:
             #state = self.update_state_by_user_input(state)
             #state = self.simulate_user_input(state)
             q_values = self.q_network(tf.constant([state]))[0].numpy()
-            print("Decision:", "S", state, "Q", np.array_str(q_values, precision=2), "Best action by Q", self.action_name(np.argmax(q_values)), "ER:", exploration_rate)
+            #print("Decision:", "S", state, "Q", np.array_str(q_values, precision=2), "Best action by Q", self.action_name(np.argmax(q_values)), "ER:", exploration_rate)
 
             # choose action
             epsilon = np.random.rand()
@@ -225,7 +214,7 @@ class RL:
             # decrease random choices over time
             if exploration_rate > 0:
                 exploration_rate -= exploration_rate_decrease
-                if exploration_rate < 0.8:
+                if exploration_rate < 0.0:
                     exploration_rate = 0
                     self.train = False
                     print("Stopping random choices")
@@ -236,8 +225,6 @@ class RL:
 
             # store current observation in training set
             t_trainingsample = [state, action, succ_state, reward]
-            while len(t_replaybuffer) >= max_sample_storage:
-                del t_replaybuffer[0]
             t_replaybuffer.append(t_trainingsample)
 
             # training
@@ -249,13 +236,88 @@ class RL:
 
     def copy_weights(self, nn_source, nn_target):
         nn_target.set_weights(nn_source.get_weights())
-                
+
+    impr_cnt = 0
+    wors_cnt = 0
     def train(self, t_replaybuffer):
         # hyperparameters
         sample_size = 32
-        num_epochs = 10
-        alpha = 1.0
-        gamma = 0.0
+        num_epochs = 50
+        alpha_q_learning_rate = 1.0
+        gamma_discout_factor = 0.0
+        loss_fn = keras.losses.MeanSquaredError()
+
+        if sample_size < 0:
+            # take only most recent training sample
+            t_samples = t_replaybuffer[sample_size:]
+        else:
+            # draw random training samples from replay buffer
+            t_samples = random.sample(t_replaybuffer, min(len(t_replaybuffer), sample_size))
+
+        # get current q-values (current NN prediction) of selected training samples and update them according to observed reward
+        inp = []
+        mask = []
+        target = []
+        pred_corr = 0
+        for t_sample in t_samples:
+            t_state = t_sample[0]
+            t_action = t_sample[1]
+            t_succ_state = t_sample[2]
+            t_reward = t_sample[3]
+
+            # predict q-values by NN
+            t_state_q_values = self.q_network(tf.constant([t_state]))[0]
+            t_succ_state_q_values = self.t_network(tf.constant([t_succ_state]))[0].numpy()
+
+            # update q-value of chosen action (Bellman equation)
+            new_t_state_target_q_value = t_state_q_values[t_action] + alpha_q_learning_rate * (t_reward + gamma_discout_factor * max(t_succ_state_q_values) - t_state_q_values[t_action])
+
+            # build training batch
+            inp.append(list(t_state))
+            mask.append(tf.one_hot(t_action, self.action_dim).numpy())
+            target.append(new_t_state_target_q_value.numpy())
+
+        target = tf.constant(target)
+
+        with tf.GradientTape() as tape:
+            nn_out = self.q_network(tf.constant(inp))
+            #print("NNO", nn_out)
+            all_q_values = tf.reduce_sum(nn_out * tf.constant(mask), axis=1)
+            loss = tf.reduce_mean(loss_fn(target, all_q_values))
+            #print("Inpt:", inp)
+            #print("Curr:", all_q_values)
+            #print("Targ:", target)
+            dif1 = sum(abs(target - all_q_values)).numpy()
+            #print("Dif1:", target - all_q_values, "(", dif1, ")")
+            #print("Loss:", loss)
+        grads = tape.gradient(loss, self.q_network.trainable_variables)
+        self.opt.apply_gradients(zip(grads, self.q_network.trainable_variables))
+        all_q_values = tf.reduce_sum(self.q_network(tf.constant(inp)) * tf.constant(mask), axis=1)
+        #print("Updt:", all_q_values)
+        dif2 = sum(abs(target - all_q_values)).numpy()
+        #print("Dif2:", target - all_q_values, "(", dif2, ")")
+        if dif2 < dif1:
+            self.impr_cnt += 1
+            #print("IMPROVED by", dif1 - dif2, "(imp%:", self.impr_cnt * 100 / (self.impr_cnt + self.wors_cnt), ")")
+        else:
+            self.wors_cnt += 1
+            #print("WORSENED by", dif2 - dif1, "(imp%:", self.impr_cnt * 100 / (self.impr_cnt + self.wors_cnt), ")")
+        print("L:", loss.numpy(), "IR:", self.impr_cnt, "/", self.wors_cnt, "(imp%:", self.impr_cnt * 100 / (self.impr_cnt + self.wors_cnt), ")")
+
+        self.sliding_corr_pred.append(pred_corr / len(t_samples))
+        #print("Sliding training sample correctness:", sum(self.sliding_corr_pred[-50:]) / 50)
+        #self.print_progress_bar(pred_corr * 100 / len(t_samples))
+        #if (sum(self.sliding_corr_pred[-5:]) / 5 > 0.98):
+        #    print("Stopping training due to good accuracy")
+        #    self.train = False
+
+    def train_fit(self, t_replaybuffer):
+        # hyperparameters
+        sample_size = 32
+        num_epochs = 50
+        alpha_q_learning_rate = 1.0
+        gamma_discout_factor = 0.0
+        loss_fn = keras.losses.MeanSquaredError()
 
         if sample_size < 0:
             # take only most recent training sample
@@ -273,15 +335,14 @@ class RL:
             t_action = t_sample[1]
             t_succ_state = t_sample[2]
             t_reward = t_sample[3]
-            
+
             # predict q-values by NN
-            t_state_q_values = self.q_network(tf.constant([t_state]))[0].numpy()
-            original_t_state_q_values = np.array(t_state_q_values)
+            t_state_q_values = self.q_network(tf.constant([t_state]))[0]
             t_succ_state_q_values = self.t_network(tf.constant([t_succ_state]))[0].numpy()
 
             # update q-value of chosen action (Bellman equation)
-            old_q = t_state_q_values[t_action]
-            t_state_q_values[t_action] = t_state_q_values[t_action] + alpha * (t_reward + gamma * max(t_succ_state_q_values) - t_state_q_values[t_action])
+            new_t_state_q_values = t_state_q_values.numpy()
+            new_t_state_q_values[t_action] = new_t_state_q_values[t_action] + alpha_q_learning_rate * (t_reward + gamma_discout_factor * max(t_succ_state_q_values) - new_t_state_q_values[t_action])
 
             # quality check
             if self.is_correct_decision(t_state, np.argmax(t_state_q_values)):
@@ -289,21 +350,14 @@ class RL:
 
             # build training batch
             inp.append(t_state)
-            out.append(t_state_q_values)
+            out.append(new_t_state_q_values)
             
             # train on single instance
-            #self.q_network.fit(tf.constant([t_state]), tf.constant([t_state_q_values]), epochs=1, verbose=0)
-            #print("S", t_state, "A", t_action, "R", t_reward, "O", np.array_str(original_t_state_q_values, precision=2), "T", np.array_str(t_state_q_values, precision=2), "R", np.array_str(self.q_network(tf.constant([t_state]))[0].numpy(), precision=2), "D", np.array_str(self.q_network(tf.constant([t_state]))[0].numpy() - original_t_state_q_values, precision=2), "correctness", self.is_correct_decision(t_state, np.argmax(t_state_q_values)))
+            self.q_network.fit(tf.constant([t_state]), tf.constant([new_t_state_q_values]), epochs=1, verbose=0)
 
-        self.q_network.fit(np.asarray(inp), np.asarray(out), epochs=num_epochs, verbose=0, shuffle=True)
-        
+            print("S", t_state, "A", t_action, "R", t_reward, "O", np.array_str(t_state_q_values.numpy(), precision=2), "T", np.array_str(new_t_state_q_values, precision=2), "U", np.array_str(self.q_network(tf.constant([t_state]))[0].numpy()), "D", np.array_str(self.q_network(tf.constant([t_state]))[0].numpy() - t_state_q_values.numpy(), precision=2), "correctness", self.is_correct_decision(t_state, np.argmax(t_state_q_values)))
+
         self.sliding_corr_pred.append(pred_corr / len(t_samples))
-        #print("Sliding training sample correctness:", sum(self.sliding_corr_pred[-50:]) / 50)
-        #self.print_progress_bar(pred_corr * 100 / len(t_samples))
-        #if (sum(self.sliding_corr_pred[-5:]) / 5 > 0.98):
-        #    print("Stopping training due to good accuracy")
-        #    self.train = False
-                    
 
     def print_progress_bar(self, percentage):
         str = "|"
@@ -335,7 +389,7 @@ class RL:
         gl = threading.Thread(target=self.game_loop, args=(main_window, ))
         gl.start()
         while not self.abort:
-            event, values = main_window.read(timeout=50)
+            event, values = main_window.read(timeout=10)
             if event == sg.WIN_CLOSED:
                 self.abort = True
                 break
