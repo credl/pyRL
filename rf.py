@@ -38,6 +38,10 @@ class RL:
     
     # quality ensurance
     sliding_corr_pred = []
+    corr_dec = 0
+    inc_dec = 0
+    impr_cnt = 0
+    wors_cnt = 0
 
     def construct_q_network(self, state_dim: int, action_dim: int) -> keras.Model:
         deep_q_network = keras.models.Sequential([
@@ -169,9 +173,9 @@ class RL:
 
     def game_loop(self, main_window):
         # hyperparameters
-        exploration_rate_start = 0.1
+        exploration_rate_start = 1.0
         exploration_rate = exploration_rate_start
-        exploration_rate_decrease = 0.0 #0001
+        exploration_rate_decrease = 0.0001
         nn_learning_rate = 0.1
         succ_state = [25, 25] #, 0, 0]
         state_dim = 2
@@ -202,7 +206,12 @@ class RL:
             #state = self.update_state_by_user_input(state)
             #state = self.simulate_user_input(state)
             q_values = self.q_network(tf.constant([state]))[0].numpy()
-            #print("Decision:", "S", state, "Q", np.array_str(q_values, precision=2), "Best action by Q", self.action_name(np.argmax(q_values)), "ER:", exploration_rate)
+            #print("Decision:", "S", state, "Q", np.array_str(q_values, precision=2), "Best action by Q", self.action_name(np.argmax(q_values)), "ER:", exploration_rate, "CORRECT:", self.corr_dec)
+            if self.is_correct_decision(state, np.argmax(q_values)):
+                self.corr_dec += 1
+            else:
+                self.inc_dec += 1
+            print("Correctness:", self.corr_dec, "/", self.inc_dec, "(", self.corr_dec * 100 / (self.corr_dec + self.inc_dec), "% correct)")
 
             # choose action
             epsilon = np.random.rand()
@@ -237,8 +246,6 @@ class RL:
     def copy_weights(self, nn_source, nn_target):
         nn_target.set_weights(nn_source.get_weights())
 
-    impr_cnt = 0
-    wors_cnt = 0
     def train(self, t_replaybuffer):
         # hyperparameters
         sample_size = 32
@@ -302,7 +309,7 @@ class RL:
         else:
             self.wors_cnt += 1
             #print("WORSENED by", dif2 - dif1, "(imp%:", self.impr_cnt * 100 / (self.impr_cnt + self.wors_cnt), ")")
-        print("L:", loss.numpy(), "IR:", self.impr_cnt, "/", self.wors_cnt, "(imp%:", self.impr_cnt * 100 / (self.impr_cnt + self.wors_cnt), ")")
+        #print("L:", loss.numpy(), "IR:", self.impr_cnt, "/", self.wors_cnt, "(imp%:", self.impr_cnt * 100 / (self.impr_cnt + self.wors_cnt), ")")
 
         self.sliding_corr_pred.append(pred_corr / len(t_samples))
         #print("Sliding training sample correctness:", sum(self.sliding_corr_pred[-50:]) / 50)
