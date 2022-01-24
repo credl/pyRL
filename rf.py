@@ -3,6 +3,7 @@ import sys
 import keyboard
 import random
 import threading
+import math
 import PySimpleGUI as sg
 import numpy as np
 import tensorflow as tf
@@ -96,7 +97,7 @@ class RL:
         #    return 0
     
         #reward = succ_state[self.ax_idx] + succ_state[self.ay_idx]
-        reward =  50 -abs(25 - succ_state[self.ax_idx]) - abs(25 - succ_state[self.ay_idx])
+        reward = 50 -abs(25 - succ_state[self.ax_idx]) - abs(25 - succ_state[self.ay_idx])
         return reward
 
     def format_state(self, state):
@@ -179,15 +180,15 @@ class RL:
 
     def game_loop(self, main_window):
         # hyperparameters
-        exploration_rate_start = 1.0
+        exploration_rate_start = 0.9
         exploration_rate = exploration_rate_start
-        exploration_rate_decrease = 0.001
+        exploration_rate_decrease = 0.00001
         learning_rate = 0.1
         succ_state = [25, 25] #, 0, 0]
         state_dim = 2
-        max_sample_storage = 10000
+        max_sample_storage = 1000
         training_interval = 100
-        accept_q_network_interval = 20
+        accept_q_network_interval = 10
 
         # construct q-network
         self.t_network = self.construct_q_network(state_dim, self.action_dim)
@@ -212,7 +213,7 @@ class RL:
             #state = self.update_state_by_user_input(state)
             #state = self.simulate_user_input(state)
             q_values = self.q_network(tf.constant([state]))[0].numpy()
-            print("Decision:", "S", state, "Q", np.array_str(q_values, precision=2), "Best action by Q", self.action_name(np.argmax(q_values)))
+            print("Decision:", "S", state, "Q", np.array_str(q_values, precision=2), "Best action by Q", self.action_name(np.argmax(q_values)), "ER:", exploration_rate)
 
             # choose action
             epsilon = np.random.rand()
@@ -224,8 +225,9 @@ class RL:
             # decrease random choices over time
             if exploration_rate > 0:
                 exploration_rate -= exploration_rate_decrease
-                if exploration_rate < 0:
+                if exploration_rate < 0.8:
                     exploration_rate = 0
+                    self.train = False
                     print("Stopping random choices")
 
             # go to successor state and obtain reward
@@ -251,7 +253,7 @@ class RL:
     def train(self, t_replaybuffer):
         # hyperparameters
         sample_size = 32
-        #num_epochs = 100
+        num_epochs = 10
         alpha = 1.0
         gamma = 0.0
 
@@ -261,7 +263,6 @@ class RL:
         else:
             # draw random training samples from replay buffer
             t_samples = random.sample(t_replaybuffer, min(len(t_replaybuffer), sample_size))
-        print("Training on", t_samples)
 
         # get current q-values (current NN prediction) of selected training samples and update them according to observed reward
         inp = []
@@ -287,15 +288,14 @@ class RL:
                 pred_corr += 1
 
             # build training batch
-            #inp.append(t_state)
-            #out.append(t_state_q_values)
+            inp.append(t_state)
+            out.append(t_state_q_values)
             
             # train on single instance
-            print("Fitting", "State", t_state, "Action", self.action_name(t_action), "Reward", t_reward)
-            self.q_network.fit(tf.constant([t_state]), tf.constant([t_state_q_values]), epochs=1, verbose=0, shuffle=True)
-            print("O", np.array_str(original_t_state_q_values, precision=2), "T", np.array_str(t_state_q_values, precision=2), "R", np.array_str(self.q_network(tf.constant([t_state]))[0].numpy(), precision=2), "correctness", self.is_correct_decision(t_state, np.argmax(t_state_q_values)))
+            #self.q_network.fit(tf.constant([t_state]), tf.constant([t_state_q_values]), epochs=1, verbose=0)
+            #print("S", t_state, "A", t_action, "R", t_reward, "O", np.array_str(original_t_state_q_values, precision=2), "T", np.array_str(t_state_q_values, precision=2), "R", np.array_str(self.q_network(tf.constant([t_state]))[0].numpy(), precision=2), "D", np.array_str(self.q_network(tf.constant([t_state]))[0].numpy() - original_t_state_q_values, precision=2), "correctness", self.is_correct_decision(t_state, np.argmax(t_state_q_values)))
 
-        #self.q_network.fit(np.asarray(inp), np.asarray(out), epochs=num_epochs, verbose=0, shuffle=True)
+        self.q_network.fit(np.asarray(inp), np.asarray(out), epochs=num_epochs, verbose=0, shuffle=True)
         
         self.sliding_corr_pred.append(pred_corr / len(t_samples))
         #print("Sliding training sample correctness:", sum(self.sliding_corr_pred[-50:]) / 50)
