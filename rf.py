@@ -47,8 +47,8 @@ class RL:
 
     def construct_q_network(self, state_dim: int, action_dim: int) -> keras.Model:
         deep_q_network = keras.models.Sequential([
-            keras.layers.Dense(32, activation="elu", input_shape=(state_dim,)),
-            keras.layers.Dense(32, activation="elu"),
+            keras.layers.Dense(10, activation="elu", input_shape=(state_dim,)),
+#            keras.layers.Dense(32, activation="elu"),
             keras.layers.Dense(action_dim)
         ])
         return deep_q_network
@@ -206,12 +206,12 @@ class RL:
         exploration_rate_start = 1.0
         exploration_rate = exploration_rate_start
         exploration_rate_decrease = 0.0001
-        nn_learning_rate = 0.1
+        nn_learning_rate = 0.3
         succ_state = [25, 25] #, 0, 0]
         state_dim = 2
         max_sample_storage = 2000
         training_interval = 1
-        accept_q_network_interval = 10
+        accept_q_network_interval = 1
         random_state_change_probability = 0.5
         random_state_change_probability_decrease = 0.001
 
@@ -362,8 +362,8 @@ class RL:
     def train_fit(self, t_replaybuffer):
         # hyperparameters
         sample_size = 32
-        num_epochs = 10
-        alpha_q_learning_rate = 1.0
+        num_epochs = 1
+        alpha_q_learning_rate = 0.1
         gamma_discout_factor = 0.0
         loss_fn = keras.losses.MeanSquaredError()
 
@@ -402,9 +402,13 @@ class RL:
             out.append(new_t_state_q_values)
             
             # train on single instance
-            self.q_network.fit(tf.constant([t_state]), tf.constant([new_t_state_q_values]), epochs=1, verbose=0)
+#            self.q_network.fit(tf.constant([t_state]), tf.constant([new_t_state_q_values]), epochs=num_epochs, verbose=0)
 
-            print("S", t_state, "A", t_action, "R", t_reward, "O", np.array_str(t_state_q_values.numpy(), precision=2), "T", np.array_str(new_t_state_q_values, precision=2), "U", np.array_str(self.q_network(tf.constant([t_state]))[0].numpy()), "D", np.array_str(self.q_network(tf.constant([t_state]))[0].numpy() - t_state_q_values.numpy(), precision=2), "correctness", self.is_correct_decision(t_state, np.argmax(t_succ_state_q_values)), "(", self.pred_corr, "/", self.pred_wrong, "=", self.pred_corr * 100 / (self.pred_corr + self.pred_wrong), "% )")
+#            print("S", t_state, "A", t_action, "R", t_reward, "O", np.array_str(t_state_q_values.numpy(), precision=2), "T", np.array_str(new_t_state_q_values, precision=2), "U", np.array_str(self.q_network(tf.constant([t_state]))[0].numpy()), "D", np.array_str(self.q_network(tf.constant([t_state]))[0].numpy() - t_state_q_values.numpy(), precision=2), "correctness", self.is_correct_decision(t_state, np.argmax(t_succ_state_q_values)), "(", self.pred_corr, "/", self.pred_wrong, "=", self.pred_corr * 100 / (self.pred_corr + self.pred_wrong), "% )")
+
+        # train on single instance
+        print("Training:", inp, out)
+        self.q_network.fit(tf.constant(inp), tf.constant(out), epochs=num_epochs, verbose=0)
 
     def print_progress_bar(self, percentage):
         str = "|"
