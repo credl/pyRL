@@ -42,6 +42,8 @@ class RL:
     inc_dec = 0
     impr_cnt = 0
     wors_cnt = 0
+    pred_corr = 0
+    pred_wrong = 0
 
     def construct_q_network(self, state_dim: int, action_dim: int) -> keras.Model:
         deep_q_network = keras.models.Sequential([
@@ -77,10 +79,10 @@ class RL:
     def get_reward(self, state, action):
         succ_state = self.get_next_state(state, action)
         
-        if self.is_correct_decision(state, action):
-            return 50
-        else:
-            return 0
+#        if self.is_correct_decision(state, action):
+#            return 50
+#        else:
+#            return 0
         
         #if abs(25 - succ_state[self.ax_idx]) < 5 and abs(25 - succ_state[self.ay_idx]) < 5: #abs( #self.is_correct_decision(state, action):
         #    return 50
@@ -90,7 +92,7 @@ class RL:
         #    return 0
     
         #reward = succ_state[self.ax_idx] + succ_state[self.ay_idx]
-        reward = 50 -abs(25 - succ_state[self.ax_idx]) - abs(25 - succ_state[self.ay_idx])
+        reward = 25 - max(abs(25 - succ_state[self.ax_idx]), abs(25 - succ_state[self.ay_idx]))
         return reward
 
     def format_state(self, state):
@@ -173,16 +175,20 @@ class RL:
         return state
 
     def is_correct_decision(self, state, action):
-        if action == 0:
-            return state[self.ax_idx] > 25
-        elif action == 1:
-            return state[self.ax_idx] < 25
-        elif action == 2:
-            return state[self.ay_idx] > 25
-        elif action == 3:
-            return state[self.ay_idx] < 25
+        dest_x = 25
+        dest_y = 25
+        if abs(state[self.ax_idx] - dest_x) >= abs(state[self.ay_idx] - dest_y):
+            if state[self.ax_idx] > dest_x:
+                dest_action = 0
+            else:
+                dest_action = 1
         else:
-            return False
+            if state[self.ay_idx] > dest_y:
+                dest_action = 2
+            else:
+                dest_action = 3
+
+        return action == dest_action
     
     def is_trainingsample_correct(self, t_trainingsample):
         (state, action, succ_state, reward) = t_trainingsample
@@ -203,9 +209,11 @@ class RL:
         nn_learning_rate = 0.1
         succ_state = [25, 25] #, 0, 0]
         state_dim = 2
-        max_sample_storage = 1000
-        training_interval = 10
+        max_sample_storage = 2000
+        training_interval = 1
         accept_q_network_interval = 10
+        random_state_change_probability = 0.5
+        random_state_change_probability_decrease = 0.001
 
         # construct q-network
         self.t_network = self.construct_q_network(state_dim, self.action_dim)
@@ -223,8 +231,19 @@ class RL:
             if self.abort:
                 break
 
-            # define current state and obtain q values (estimated by NN)
             state = succ_state
+            
+            # state randomization
+            if np.random.rand() < random_state_change_probability:
+                state[self.ax_idx] = np.random.choice(self.width)
+                state[self.ay_idx] = np.random.choice(self.height)
+
+            if random_state_change_probability > 0:
+                random_state_change_probability -= random_state_change_probability_decrease
+                if random_state_change_probability < 0:
+                    random_state_change_probability = 0
+
+            # define current state and obtain q values (estimated by NN)
             self.frozen_state = state
             self.have_frozen_state = True
             #state = self.update_state_by_user_input(state)
@@ -235,7 +254,7 @@ class RL:
                 self.corr_dec += 1
             else:
                 self.inc_dec += 1
-            print("Correctness:", self.corr_dec, "/", self.inc_dec, "(", self.corr_dec * 100 / (self.corr_dec + self.inc_dec), "% correct)")
+            #print("Correctness of NN decisions:", self.corr_dec, "/", self.inc_dec, "(", self.corr_dec * 100 / (self.corr_dec + self.inc_dec), "% correct)")
 
             # choose action
             epsilon = np.random.rand()
@@ -262,7 +281,7 @@ class RL:
 
             # training
             if self.train and step % training_interval == 0:
-                self.train(t_replaybuffer)
+                self.train_fit(t_replaybuffer)
             if self.train and step % accept_q_network_interval == 0:
                 #print("Accepting q network as target. Exploration rate:", exploration_rate)
                 self.copy_weights(self.q_network, self.t_network)
@@ -270,10 +289,9 @@ class RL:
     def copy_weights(self, nn_source, nn_target):
         nn_target.set_weights(nn_source.get_weights())
 
-    def train(self, t_replaybuffer):
+    def train_grad(self, t_replaybuffer):
         # hyperparameters
         sample_size = 32
-        num_epochs = 50
         alpha_q_learning_rate = 1.0
         gamma_discout_factor = 0.0
         loss_fn = keras.losses.MeanSquaredError()
@@ -289,7 +307,6 @@ class RL:
         inp = []
         mask = []
         target = []
-        pred_corr = 0
         for t_sample in t_samples:
             t_state = t_sample[0]
             t_action = t_sample[1]
@@ -333,9 +350,9 @@ class RL:
         else:
             self.wors_cnt += 1
             #print("WORSENED by", dif2 - dif1, "(imp%:", self.impr_cnt * 100 / (self.impr_cnt + self.wors_cnt), ")")
-        #print("L:", loss.numpy(), "IR:", self.impr_cnt, "/", self.wors_cnt, "(imp%:", self.impr_cnt * 100 / (self.impr_cnt + self.wors_cnt), ")")
+        print("L:", loss.numpy(), "C:", dif2, "IR:", self.impr_cnt, "/", self.wors_cnt, "(imp%:", self.impr_cnt * 100 / (self.impr_cnt + self.wors_cnt), ")")
 
-        self.sliding_corr_pred.append(pred_corr / len(t_samples))
+        #self.sliding_corr_pred.append(self.pred_corr / len(t_samples))
         #print("Sliding training sample correctness:", sum(self.sliding_corr_pred[-50:]) / 50)
         #self.print_progress_bar(pred_corr * 100 / len(t_samples))
         #if (sum(self.sliding_corr_pred[-5:]) / 5 > 0.98):
@@ -344,7 +361,7 @@ class RL:
 
     def train_fit(self, t_replaybuffer):
         # hyperparameters
-        sample_size = 10
+        sample_size = 32
         num_epochs = 10
         alpha_q_learning_rate = 1.0
         gamma_discout_factor = 0.0
@@ -360,7 +377,6 @@ class RL:
         # get current q-values (current NN prediction) of selected training samples and update them according to observed reward
         inp = []
         out = []
-        pred_corr = 0
         for t_sample in t_samples:
             t_state = t_sample[0]
             t_action = t_sample[1]
@@ -377,7 +393,9 @@ class RL:
 
             # quality check
             if self.is_correct_decision(t_state, np.argmax(t_state_q_values)):
-                pred_corr += 1
+                self.pred_corr += 1
+            else:
+                self.pred_wrong += 1
 
             # build training batch
             inp.append(t_state)
@@ -386,9 +404,7 @@ class RL:
             # train on single instance
             self.q_network.fit(tf.constant([t_state]), tf.constant([new_t_state_q_values]), epochs=1, verbose=0)
 
-            print("S", t_state, "A", t_action, "R", t_reward, "O", np.array_str(t_state_q_values.numpy(), precision=2), "T", np.array_str(new_t_state_q_values, precision=2), "U", np.array_str(self.q_network(tf.constant([t_state]))[0].numpy()), "D", np.array_str(self.q_network(tf.constant([t_state]))[0].numpy() - t_state_q_values.numpy(), precision=2), "correctness", self.is_correct_decision(t_state, np.argmax(t_state_q_values)))
-
-        self.sliding_corr_pred.append(pred_corr / len(t_samples))
+            print("S", t_state, "A", t_action, "R", t_reward, "O", np.array_str(t_state_q_values.numpy(), precision=2), "T", np.array_str(new_t_state_q_values, precision=2), "U", np.array_str(self.q_network(tf.constant([t_state]))[0].numpy()), "D", np.array_str(self.q_network(tf.constant([t_state]))[0].numpy() - t_state_q_values.numpy(), precision=2), "correctness", self.is_correct_decision(t_state, np.argmax(t_succ_state_q_values)), "(", self.pred_corr, "/", self.pred_wrong, "=", self.pred_corr * 100 / (self.pred_corr + self.pred_wrong), "% )")
 
     def print_progress_bar(self, percentage):
         str = "|"
@@ -420,7 +436,7 @@ class RL:
         gl = threading.Thread(target=self.game_loop, args=(main_window, ))
         gl.start()
         while not self.abort:
-            event, values = main_window.read(timeout=10)
+            event, values = main_window.read(timeout=1)
             if event == sg.WIN_CLOSED:
                 self.abort = True
                 break
