@@ -103,13 +103,37 @@ class RL:
 
     def visualizefield(self, main_window, state):
         main_window["-CANV-"].DrawRectangle((0, 0), (self.width * self.box_size, self.height * self.box_size), fill_color="white")
+
+        for y in range(0, self.height, 5):
+            for x in range(0, self.height, 5):
+                action = np.argmax  (self.q_network(tf.constant([[x,y]]))[0])
+                if action == 0:
+                    col = "yellow"
+                    offsx = -self.box_size / 2
+                    offsy = 0
+                elif action == 1:
+                    col = "green"
+                    offsx = +self.box_size / 2
+                    offsy = 0
+                elif action == 2:
+                    col = "blue"
+                    offsx = 0
+                    offsy = -self.box_size / 2
+                elif action == 3:
+                    col = "grey"
+                    offsx = 0
+                    offsy = +self.box_size / 2
+                main_window["-CANV-"].DrawRectangle((x * self.box_size, y * self.box_size), ((x + 1) * self.box_size - 1, (y + 1) * self.box_size - 1), fill_color=col)
+                main_window["-CANV-"].DrawRectangle(((x + 0.5) * self.box_size + offsx - 3, (y + 0.5) * self.box_size + offsy - 3), ((x + 0.5) * self.box_size - 1 + offsx + 3, (y + 0.5) * self.box_size - 1 + offsy + 3), fill_color="black")
+                #main_window["-CANV-"].DrawText(x * self.box_size, y * self.box_size, fill="red", text="H")
+
         main_window["-CANV-"].DrawRectangle((0 * self.box_size, 0 * self.box_size), (self.width * self.box_size - 1, 1 * self.box_size - 1), fill_color="black")
         main_window["-CANV-"].DrawRectangle((0 * self.box_size, (self.height - 1) * self.box_size), (self.width * self.box_size - 1, self.height * self.box_size - 1), fill_color="black")
         main_window["-CANV-"].DrawRectangle((0 * self.box_size, 0 * self.box_size), (1 * self.box_size - 1, self.height * self.box_size - 1), fill_color="black")
         main_window["-CANV-"].DrawRectangle(((self.width - 1) * self.box_size, 0 * self.box_size), (self.width * self.box_size - 1, self.height * self.box_size - 1), fill_color="black")
         main_window["-CANV-"].DrawRectangle((state[self.ax_idx] * self.box_size, state[self.ay_idx] * self.box_size), ((state[self.ax_idx] + 1) * self.box_size - 1, (state[self.ay_idx] + 1) * self.box_size - 1), fill_color="red")
         #main_window["-CANV-"].DrawRectangle((state[self.px_idx] * self.box_size, state[self.py_idx] * self.box_size), ((state[self.px_idx] + 1) * self.box_size - 1, (state[self.py_idx] + 1) * self.box_size - 1), fill_color="yellow")
-        
+
     def simulate_user_input(self, state):
         if state[self.px_idx] == 0:
             # go up at left edge
@@ -150,13 +174,13 @@ class RL:
 
     def is_correct_decision(self, state, action):
         if action == 0:
-            return state[self.ax_idx] > 40
+            return state[self.ax_idx] > 25
         elif action == 1:
-            return state[self.ax_idx] < 40
+            return state[self.ax_idx] < 25
         elif action == 2:
-            return state[self.ay_idx] > 40
+            return state[self.ay_idx] > 25
         elif action == 3:
-            return state[self.ay_idx] < 40
+            return state[self.ay_idx] < 25
         else:
             return False
     
@@ -179,7 +203,7 @@ class RL:
         nn_learning_rate = 0.1
         succ_state = [25, 25] #, 0, 0]
         state_dim = 2
-        max_sample_storage = 10000
+        max_sample_storage = 1000
         training_interval = 10
         accept_q_network_interval = 10
 
@@ -320,8 +344,8 @@ class RL:
 
     def train_fit(self, t_replaybuffer):
         # hyperparameters
-        sample_size = 32
-        num_epochs = 50
+        sample_size = 10
+        num_epochs = 10
         alpha_q_learning_rate = 1.0
         gamma_discout_factor = 0.0
         loss_fn = keras.losses.MeanSquaredError()
