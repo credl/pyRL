@@ -47,10 +47,11 @@ class RL:
 
     def construct_q_network(self, state_dim: int, action_dim: int) -> keras.Model:
         deep_q_network = keras.models.Sequential([
-            keras.layers.Dense(10, activation="elu", input_shape=(state_dim,)),
-#            keras.layers.Dense(32, activation="elu"),
-            keras.layers.Dense(action_dim)
+            keras.layers.Dense(32, activation="elu", input_shape=(state_dim,), kernel_initializer='random_normal', bias_initializer='random_normal'),
+            keras.layers.Dense(32, activation="elu", kernel_initializer='random_normal', bias_initializer='random_normal'),
+            keras.layers.Dense(action_dim, activation="linear", kernel_initializer='random_normal', bias_initializer='random_normal')
         ])
+        print(deep_q_network.weights)
         return deep_q_network
 
     def get_next_state(self, state, action):
@@ -77,22 +78,24 @@ class RL:
         return state
 
     def get_reward(self, state, action):
+        #print("S:", state, "A:", action)
         succ_state = self.get_next_state(state, action)
+        #print("SS:", succ_state)
         
 #        if self.is_correct_decision(state, action):
 #            return 50
 #        else:
 #            return 0
-        
-        #if abs(25 - succ_state[self.ax_idx]) < 5 and abs(25 - succ_state[self.ay_idx]) < 5: #abs( #self.is_correct_decision(state, action):
-        #    return 50
-        #elif abs(25 - succ_state[self.ax_idx]) < 15 and abs(25 - succ_state[self.ay_idx]) < 15: #abs( #self.is_correct_decision(state, action):
-        #    return 10
-        #else:
-        #    return 0
+
+#        if abs(25 - succ_state[self.ax_idx]) < 5 and abs(25 - succ_state[self.ay_idx]) < 5: #abs( #self.is_correct_decision(state, action):
+#            return 50
+#        elif abs(25 - succ_state[self.ax_idx]) < 15 and abs(25 - succ_state[self.ay_idx]) < 15: #abs( #self.is_correct_decision(state, action):
+#            return 10
+#        else:
+#            return 0
     
         #reward = succ_state[self.ax_idx] + succ_state[self.ay_idx]
-        reward = 25 - max(abs(25 - succ_state[self.ax_idx]), abs(25 - succ_state[self.ay_idx]))
+        reward = (25 - max(abs(25 - succ_state[self.ax_idx]), abs(25 - succ_state[self.ay_idx])))
         return reward
 
     def format_state(self, state):
@@ -106,9 +109,11 @@ class RL:
     def visualizefield(self, main_window, state):
         main_window["-CANV-"].DrawRectangle((0, 0), (self.width * self.box_size, self.height * self.box_size), fill_color="white")
 
+        nn_out = []
         for y in range(0, self.height, 5):
             for x in range(0, self.height, 5):
-                action = np.argmax  (self.q_network(tf.constant([[x,y]]))[0])
+                nn_out.append(self.q_network(tf.constant([[x,y]]))[0])
+                action = np.argmax(nn_out[-1])
                 if action == 0:
                     col = "yellow"
                     offsx = -self.box_size / 2
@@ -128,6 +133,7 @@ class RL:
                 main_window["-CANV-"].DrawRectangle((x * self.box_size, y * self.box_size), ((x + 1) * self.box_size - 1, (y + 1) * self.box_size - 1), fill_color=col)
                 main_window["-CANV-"].DrawRectangle(((x + 0.5) * self.box_size + offsx - 3, (y + 0.5) * self.box_size + offsy - 3), ((x + 0.5) * self.box_size - 1 + offsx + 3, (y + 0.5) * self.box_size - 1 + offsy + 3), fill_color="black")
                 #main_window["-CANV-"].DrawText(x * self.box_size, y * self.box_size, fill="red", text="H")
+#        print("NNOUT", nn_out)
 
         main_window["-CANV-"].DrawRectangle((0 * self.box_size, 0 * self.box_size), (self.width * self.box_size - 1, 1 * self.box_size - 1), fill_color="black")
         main_window["-CANV-"].DrawRectangle((0 * self.box_size, (self.height - 1) * self.box_size), (self.width * self.box_size - 1, self.height * self.box_size - 1), fill_color="black")
@@ -177,7 +183,18 @@ class RL:
     def is_correct_decision(self, state, action):
         dest_x = 25
         dest_y = 25
-        if abs(state[self.ax_idx] - dest_x) >= abs(state[self.ay_idx] - dest_y):
+        if abs(state[self.ax_idx] - dest_x) == 0 and abs(state[self.ay_idx] - dest_y) == 0:
+            return True
+        elif abs(state[self.ax_idx] - dest_x) == abs(state[self.ay_idx] - dest_y):
+            if state[self.ax_idx] > dest_x and state[self.ay_idx] > dest_y:
+                return action == 0 or action == 2
+            elif state[self.ax_idx] > dest_x and state[self.ay_idx] < dest_y:
+                return action == 0 or action == 3
+            elif state[self.ax_idx] < dest_x and state[self.ay_idx] > dest_y:
+                return action == 1 or action == 2
+            else:
+                return action == 1 or action == 3
+        elif abs(state[self.ax_idx] - dest_x) > abs(state[self.ay_idx] - dest_y):
             if state[self.ax_idx] > dest_x:
                 dest_action = 0
             else:
@@ -205,15 +222,15 @@ class RL:
         # hyperparameters
         exploration_rate_start = 1.0
         exploration_rate = exploration_rate_start
-        exploration_rate_decrease = 0.0001
-        nn_learning_rate = 0.3
+        exploration_rate_decrease = 0.0 #001
+        nn_learning_rate = 0.2
         succ_state = [25, 25] #, 0, 0]
         state_dim = 2
         max_sample_storage = 2000
         training_interval = 1
         accept_q_network_interval = 1
         random_state_change_probability = 0.5
-        random_state_change_probability_decrease = 0.001
+        random_state_change_probability_decrease = 0.0 #01
 
         # construct q-network
         self.t_network = self.construct_q_network(state_dim, self.action_dim)
@@ -254,7 +271,7 @@ class RL:
                 self.corr_dec += 1
             else:
                 self.inc_dec += 1
-            #print("Correctness of NN decisions:", self.corr_dec, "/", self.inc_dec, "(", self.corr_dec * 100 / (self.corr_dec + self.inc_dec), "% correct)")
+            print("Correctness of NN decisions:", self.corr_dec, "/", self.inc_dec, "(", self.corr_dec * 100 / (self.corr_dec + self.inc_dec), "% correct)")
 
             # choose action
             epsilon = np.random.rand()
@@ -359,17 +376,29 @@ class RL:
         #    print("Stopping training due to good accuracy")
         #    self.train = False
 
+    corr_t_q = deque(maxlen=100)
+    stat_avg = deque(maxlen=100)
+    ts = 0
+    def statavg(self):
+        xs = ys = zs = ws = 0
+        for (x,y,z,w) in self.stat_avg:
+            xs += x
+            ys += y
+            zs += z
+            ws += w
+        return (xs / len(self.stat_avg), ys / len(self.stat_avg), zs / len(self.stat_avg), ws / len(self.stat_avg))
+    
     def train_fit(self, t_replaybuffer):
         # hyperparameters
         sample_size = 32
-        num_epochs = 1
-        alpha_q_learning_rate = 0.1
+        num_epochs = 10
+        alpha_q_learning_rate = 1.0
         gamma_discout_factor = 0.0
         loss_fn = keras.losses.MeanSquaredError()
 
         if sample_size < 0:
             # take only most recent training sample
-            t_samples = t_replaybuffer[sample_size:]
+            t_samples = [t_replaybuffer[sample_size]]
         else:
             # draw random training samples from replay buffer
             t_samples = random.sample(t_replaybuffer, min(len(t_replaybuffer), sample_size))
@@ -389,6 +418,8 @@ class RL:
 
             # update q-value of chosen action (Bellman equation)
             new_t_state_q_values = t_state_q_values.numpy()
+#            for t_action in range(4):
+            t_reward = self.get_reward(t_state, t_action)
             new_t_state_q_values[t_action] = new_t_state_q_values[t_action] + alpha_q_learning_rate * (t_reward + gamma_discout_factor * max(t_succ_state_q_values) - new_t_state_q_values[t_action])
 
             # quality check
@@ -402,13 +433,30 @@ class RL:
             out.append(new_t_state_q_values)
             
             # train on single instance
-#            self.q_network.fit(tf.constant([t_state]), tf.constant([new_t_state_q_values]), epochs=num_epochs, verbose=0)
+            self.q_network.fit(tf.constant([t_state]), tf.constant([new_t_state_q_values]), epochs=num_epochs, verbose=0)
 
-#            print("S", t_state, "A", t_action, "R", t_reward, "O", np.array_str(t_state_q_values.numpy(), precision=2), "T", np.array_str(new_t_state_q_values, precision=2), "U", np.array_str(self.q_network(tf.constant([t_state]))[0].numpy()), "D", np.array_str(self.q_network(tf.constant([t_state]))[0].numpy() - t_state_q_values.numpy(), precision=2), "correctness", self.is_correct_decision(t_state, np.argmax(t_succ_state_q_values)), "(", self.pred_corr, "/", self.pred_wrong, "=", self.pred_corr * 100 / (self.pred_corr + self.pred_wrong), "% )")
+            new_q_values = self.q_network(tf.constant([t_state]))[0].numpy()
+            diff = new_q_values - t_state_q_values.numpy()
+            if new_t_state_q_values[t_action] > t_state_q_values[t_action]:
+                change_in_correct_direction = new_q_values[t_action] > t_state_q_values[t_action]
+            else:
+                change_in_correct_direction = new_q_values[t_action] < t_state_q_values[t_action]
+            largest_change = abs(diff[t_action]) >= max(abs(diff))
+            correct_dec = self.is_correct_decision(t_state, np.argmax(new_q_values))
+            self.stat_avg.append((change_in_correct_direction.numpy(), largest_change, correct_dec, sum(abs(diff))))
+            self.ts += 1
+            print("TS", self.ts, "CICD", 1 if change_in_correct_direction.numpy() else 0, "LC", 1 if largest_change else 0, "CORR", 1 if self.is_correct_decision(t_state, np.argmax(new_q_values)) else 0, "AVG", self.statavg(), "C", sum(abs(diff)),
+                "S", t_state, "A", t_action, "R", t_reward, "O", np.array_str(t_state_q_values.numpy(), precision=2), "T", np.array_str(new_t_state_q_values, precision=2), "U", np.array_str(new_q_values), "D", np.array_str(diff, precision=2), "correctness", correct_dec)
 
         # train on single instance
-        print("Training:", inp, out)
-        self.q_network.fit(tf.constant(inp), tf.constant(out), epochs=num_epochs, verbose=0)
+        corr_t = 0
+        for (i, o) in zip(inp, out):
+            if self.is_correct_decision(i, np.argmax(o)):
+                corr_t += 1
+            #print("Training:", i, o, self.is_correct_decision(i, np.argmax(o)))
+        self.corr_t_q.append(corr_t / len(inp))
+        #print("Corr T:", corr_t, "/", len(inp), "Corr T avg:", sum(self.corr_t_q) * 100 / len(self.corr_t_q), "%")
+        #self.q_network.fit(tf.constant(inp), tf.constant(out), epochs=num_epochs, verbose=0)
 
     def print_progress_bar(self, percentage):
         str = "|"
@@ -447,8 +495,8 @@ class RL:
             else:
                 if self.have_frozen_state:
                     self.visualizefield(main_window, self.frozen_state)
-                if keyboard.is_pressed('Esc'):
-                    main_window.close()
+                #if keyboard.is_pressed('Esc'):
+                #    main_window.close()
 
 if __name__ == "__main__":
     np.set_printoptions(formatter={'float': '{: .2f}'.format})
