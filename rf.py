@@ -298,7 +298,7 @@ class RL:
 
             # training
             if self.train and step % training_interval == 0:
-                self.train_fit(t_replaybuffer)
+                self.train_grad(t_replaybuffer)
             if self.train and step % accept_q_network_interval == 0:
                 #print("Accepting q network as target. Exploration rate:", exploration_rate)
                 self.copy_weights(self.q_network, self.t_network)
@@ -308,20 +308,21 @@ class RL:
 
     def train_grad(self, t_replaybuffer):
         # hyperparameters
-        sample_size = 32
+        sample_size = -1
         alpha_q_learning_rate = 1.0
         gamma_discout_factor = 0.0
-        loss_fn = keras.losses.MeanSquaredError()
+        loss_fn = keras.losses.Huber()
 
         if sample_size < 0:
             # take only most recent training sample
-            t_samples = t_replaybuffer[sample_size:]
+            t_samples = [t_replaybuffer[sample_size]]
         else:
             # draw random training samples from replay buffer
             t_samples = random.sample(t_replaybuffer, min(len(t_replaybuffer), sample_size))
 
         # get current q-values (current NN prediction) of selected training samples and update them according to observed reward
         inp = []
+        actions = []
         mask = []
         target = []
         for t_sample in t_samples:
@@ -339,6 +340,7 @@ class RL:
 
             # build training batch
             inp.append(list(t_state))
+            actions.append(t_action)
             mask.append(tf.one_hot(t_action, self.action_dim).numpy())
             target.append(new_t_state_target_q_value.numpy())
 
@@ -353,22 +355,31 @@ class RL:
             #print("Curr:", all_q_values)
             #print("Targ:", target)
             dif1 = sum(abs(target - all_q_values)).numpy()
+            #print("INP", inp, "Q", all_q_values, "Targ", target)
             #print("Dif1:", target - all_q_values, "(", dif1, ")")
             #print("Loss:", loss)
         grads = tape.gradient(loss, self.q_network.trainable_variables)
         self.opt.apply_gradients(zip(grads, self.q_network.trainable_variables))
-        all_q_values = tf.reduce_sum(self.q_network(tf.constant(inp)) * tf.constant(mask), axis=1)
+        all_q_values_updated = tf.reduce_sum(self.q_network(tf.constant(inp)) * tf.constant(mask), axis=1)
         #print("Updt:", all_q_values)
-        dif2 = sum(abs(target - all_q_values)).numpy()
-        #print("Dif2:", target - all_q_values, "(", dif2, ")")
+        dif2 = sum(abs(target - all_q_values_updated)).numpy()
+        #print("Dif2:", target - all_q_values_updated, "(", dif2, ")")
         if dif2 < dif1:
             self.impr_cnt += 1
             #print("IMPROVED by", dif1 - dif2, "(imp%:", self.impr_cnt * 100 / (self.impr_cnt + self.wors_cnt), ")")
         else:
             self.wors_cnt += 1
             #print("WORSENED by", dif2 - dif1, "(imp%:", self.impr_cnt * 100 / (self.impr_cnt + self.wors_cnt), ")")
-        print("L:", loss.numpy(), "C:", dif2, "IR:", self.impr_cnt, "/", self.wors_cnt, "(imp%:", self.impr_cnt * 100 / (self.impr_cnt + self.wors_cnt), ")")
+        #print("L:", loss.numpy(), "C:", dif2, "IR:", self.impr_cnt, "/", self.wors_cnt, "(imp%:", self.impr_cnt * 100 / (self.impr_cnt + self.wors_cnt), ")")
+        for (s, a, q, t, qn) in zip(inp, actions, all_q_values, target, all_q_values_updated):
+            if t > q:
+                change_in_correct_direction = qn > q
+            else:
+                change_in_correct_direction = qn < q
 
+            print("AC", a, "Q", "{:6.2f}".format(q.numpy()), "T", "{:6.2f}".format(t.numpy()), "U", "{:6.2f}".format(qn.numpy()), "CICD", 1 if change_in_correct_direction else 0, "COR", 1 if self.is_correct_decision(s, np.argmax(qn)) else 0, "ST", s)
+        print("L:", loss.numpy())
+        
         #self.sliding_corr_pred.append(self.pred_corr / len(t_samples))
         #print("Sliding training sample correctness:", sum(self.sliding_corr_pred[-50:]) / 50)
         #self.print_progress_bar(pred_corr * 100 / len(t_samples))
@@ -391,7 +402,7 @@ class RL:
     def train_fit(self, t_replaybuffer):
         # hyperparameters
         sample_size = 32
-        num_epochs = 10
+        num_epochs = 5
         alpha_q_learning_rate = 1.0
         gamma_discout_factor = 0.0
         loss_fn = keras.losses.MeanSquaredError()
