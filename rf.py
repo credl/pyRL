@@ -223,7 +223,7 @@ class RL:
         exploration_rate_start = 1.0
         exploration_rate = exploration_rate_start
         exploration_rate_decrease = 0.0 #001
-        nn_learning_rate = 0.2
+        nn_learning_rate = 0.01
         succ_state = [25, 25] #, 0, 0]
         state_dim = 2
         max_sample_storage = 2000
@@ -308,7 +308,7 @@ class RL:
 
     def train_grad(self, t_replaybuffer):
         # hyperparameters
-        sample_size = -1
+        sample_size = 32
         alpha_q_learning_rate = 1.0
         gamma_discout_factor = 0.0
         loss_fn = keras.losses.Huber()
@@ -350,7 +350,7 @@ class RL:
             nn_out = self.q_network(tf.constant(inp))
             #print("NNO", nn_out)
             all_q_values = tf.reduce_sum(nn_out * tf.constant(mask), axis=1)
-            loss = tf.reduce_mean(loss_fn(target, all_q_values))
+            loss = loss_fn(target, all_q_values)
             #print("Inpt:", inp)
             #print("Curr:", all_q_values)
             #print("Targ:", target)
@@ -376,8 +376,7 @@ class RL:
                 change_in_correct_direction = qn > q
             else:
                 change_in_correct_direction = qn < q
-
-            print("AC", a, "Q", "{:6.2f}".format(q.numpy()), "T", "{:6.2f}".format(t.numpy()), "U", "{:6.2f}".format(qn.numpy()), "CICD", 1 if change_in_correct_direction else 0, "COR", 1 if self.is_correct_decision(s, np.argmax(qn)) else 0, "ST", s)
+            #print("AC", a, "Q", "{:6.2f}".format(q.numpy()), "T", "{:6.2f}".format(t.numpy()), "U", "{:6.2f}".format(qn.numpy()), "CICD", 1 if change_in_correct_direction else 0, "COR", 1 if self.is_correct_decision(s, np.argmax(qn)) else 0, "ST", s)
         print("L:", loss.numpy())
         
         #self.sliding_corr_pred.append(self.pred_corr / len(t_samples))
