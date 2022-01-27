@@ -51,7 +51,7 @@ class RL:
             keras.layers.Dense(32, activation="elu", kernel_initializer='random_normal', bias_initializer='random_normal'),
             keras.layers.Dense(action_dim, activation="linear", kernel_initializer='random_normal', bias_initializer='random_normal')
         ])
-        print(deep_q_network.weights)
+        #print(deep_q_network.weights)
         return deep_q_network
 
     def get_next_state(self, state, action):
@@ -87,15 +87,15 @@ class RL:
 #        else:
 #            return 0
 
-#        if abs(25 - succ_state[self.ax_idx]) < 5 and abs(25 - succ_state[self.ay_idx]) < 5: #abs( #self.is_correct_decision(state, action):
-#            return 50
-#        elif abs(25 - succ_state[self.ax_idx]) < 15 and abs(25 - succ_state[self.ay_idx]) < 15: #abs( #self.is_correct_decision(state, action):
-#            return 10
-#        else:
-#            return 0
+        if abs(25 - succ_state[self.ax_idx]) < 5 and abs(25 - succ_state[self.ay_idx]) < 5: #abs( #self.is_correct_decision(state, action):
+            return 50
+        elif abs(25 - succ_state[self.ax_idx]) < 15 and abs(25 - succ_state[self.ay_idx]) < 15: #abs( #self.is_correct_decision(state, action):
+            return 10
+        else:
+            return 0
     
         #reward = succ_state[self.ax_idx] + succ_state[self.ay_idx]
-        reward = (25 - max(abs(25 - succ_state[self.ax_idx]), abs(25 - succ_state[self.ay_idx])))
+#        reward = (25 - max(abs(25 - succ_state[self.ax_idx]), abs(25 - succ_state[self.ay_idx])))
         return reward
 
     def format_state(self, state):
@@ -220,16 +220,16 @@ class RL:
 
     def game_loop(self, main_window):
         # hyperparameters
-        exploration_rate_start = 1.0
+        exploration_rate_start = 0.5
         exploration_rate = exploration_rate_start
-        exploration_rate_decrease = 0.0 #001
+        exploration_rate_decrease = 0.0001
         nn_learning_rate = 0.01
         succ_state = [25, 25] #, 0, 0]
         state_dim = 2
         max_sample_storage = 2000
         training_interval = 1
         accept_q_network_interval = 1
-        random_state_change_probability = 0.5
+        random_state_change_probability = 0.0
         random_state_change_probability_decrease = 0.0 #01
 
         # construct q-network
@@ -285,7 +285,7 @@ class RL:
                 exploration_rate -= exploration_rate_decrease
                 if exploration_rate < 0.0:
                     exploration_rate = 0
-                    self.train = False
+                    #self.train = False
                     print("Stopping random choices")
 
             # go to successor state and obtain reward
@@ -401,9 +401,9 @@ class RL:
     def train_fit(self, t_replaybuffer):
         # hyperparameters
         sample_size = 32
-        num_epochs = 20
-        alpha_q_learning_rate = 1.0
-        gamma_discout_factor = 0.0
+        num_epochs = 10
+        alpha_q_learning_rate = 0.5
+        gamma_discout_factor = 0.8
         loss_fn = keras.losses.MeanSquaredError()
 
         if sample_size < 0:
@@ -465,8 +465,9 @@ class RL:
             correct_dec = self.is_correct_decision(t_state, np.argmax(new_t_state_q_values))
             self.stat_avg.append((change_in_correct_direction.numpy(), largest_change, correct_dec, sum(abs(diff))))
             self.ts += 1
-            print("TS", self.ts, "CICD", 1 if change_in_correct_direction.numpy() else 0, "LC", 1 if largest_change else 0, "CORR", 1 if self.is_correct_decision(t_state, np.argmax(updated_q_values)) else 0, "AVG", self.statavg(), "C", sum(abs(diff)),
-                "S", t_state, "A", t_action, "R", t_reward, "O", np.array_str(t_state_q_values.numpy(), precision=2), "T", np.array_str(target_t_state_q_values, precision=2), "U", np.array_str(new_t_state_q_values), "D", np.array_str(diff, precision=2), "correctness", correct_dec)
+            #print("TS", self.ts, "CICD", 1 if change_in_correct_direction.numpy() else 0, "LC", 1 if largest_change else 0, "CORR", 1 if self.is_correct_decision(t_state, np.argmax(new_t_state_q_values)) else 0, "AVG", self.statavg(), "C", sum(abs(diff)),
+            #    "S", t_state, "A", t_action, "R", t_reward, "O", np.array_str(t_state_q_values.numpy(), precision=2), "T", np.array_str(target_t_state_q_values, precision=2), "U", np.array_str(new_t_state_q_values), "D", np.array_str(diff, precision=2),
+            #    "correctness", correct_dec)
 
     def print_progress_bar(self, percentage):
         str = "|"
