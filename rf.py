@@ -298,7 +298,7 @@ class RL:
 
             # training
             if self.train and step % training_interval == 0:
-                self.train_grad(t_replaybuffer)
+                self.train_fit(t_replaybuffer)
             if self.train and step % accept_q_network_interval == 0:
                 #print("Accepting q network as target. Exploration rate:", exploration_rate)
                 self.copy_weights(self.q_network, self.t_network)
@@ -401,7 +401,7 @@ class RL:
     def train_fit(self, t_replaybuffer):
         # hyperparameters
         sample_size = 32
-        num_epochs = 5
+        num_epochs = 20
         alpha_q_learning_rate = 1.0
         gamma_discout_factor = 0.0
         loss_fn = keras.losses.MeanSquaredError()
@@ -416,6 +416,8 @@ class RL:
         # get current q-values (current NN prediction) of selected training samples and update them according to observed reward
         inp = []
         out = []
+        old_q_values = []
+        updated_q_values = []
         for t_sample in t_samples:
             t_state = t_sample[0]
             t_action = t_sample[1]
@@ -428,45 +430,43 @@ class RL:
 
             # update q-value of chosen action (Bellman equation)
             new_t_state_q_values = t_state_q_values.numpy()
-#            for t_action in range(4):
             t_reward = self.get_reward(t_state, t_action)
             new_t_state_q_values[t_action] = new_t_state_q_values[t_action] + alpha_q_learning_rate * (t_reward + gamma_discout_factor * max(t_succ_state_q_values) - new_t_state_q_values[t_action])
-
-            # quality check
-            if self.is_correct_decision(t_state, np.argmax(t_state_q_values)):
-                self.pred_corr += 1
-            else:
-                self.pred_wrong += 1
 
             # build training batch
             inp.append(t_state)
             out.append(new_t_state_q_values)
             
             # train on single instance
-            self.q_network.fit(tf.constant([t_state]), tf.constant([new_t_state_q_values]), epochs=num_epochs, verbose=0)
+            #self.q_network.fit(tf.constant([t_state]), tf.constant([new_t_state_q_values]), epochs=num_epochs, verbose=0)
 
-            new_q_values = self.q_network(tf.constant([t_state]))[0].numpy()
-            diff = new_q_values - t_state_q_values.numpy()
+            old_q_values.append(t_state_q_values)
+            updated_q_values.append(new_t_state_q_values)
+
+        # train on all instances
+        self.q_network.fit(tf.constant(inp), tf.constant(out), epochs=num_epochs, verbose=0)
+
+        # quality check
+        for idx in range(len(t_samples)):
+            t_state = t_samples[idx][0]
+            t_action = t_samples[idx][1]
+            t_succ_state = t_samples[idx][2]
+            t_reward = t_samples[idx][3]
+            t_state_q_values = old_q_values[idx]
+            target_t_state_q_values = updated_q_values[idx]
+            new_t_state_q_values = self.t_network(tf.constant([t_succ_state]))[0].numpy()
+
+            diff = new_t_state_q_values - t_state_q_values.numpy()
             if new_t_state_q_values[t_action] > t_state_q_values[t_action]:
-                change_in_correct_direction = new_q_values[t_action] > t_state_q_values[t_action]
+                change_in_correct_direction = new_t_state_q_values[t_action] > t_state_q_values[t_action]
             else:
-                change_in_correct_direction = new_q_values[t_action] < t_state_q_values[t_action]
+                change_in_correct_direction = new_t_state_q_values[t_action] < t_state_q_values[t_action]
             largest_change = abs(diff[t_action]) >= max(abs(diff))
-            correct_dec = self.is_correct_decision(t_state, np.argmax(new_q_values))
+            correct_dec = self.is_correct_decision(t_state, np.argmax(new_t_state_q_values))
             self.stat_avg.append((change_in_correct_direction.numpy(), largest_change, correct_dec, sum(abs(diff))))
             self.ts += 1
-            print("TS", self.ts, "CICD", 1 if change_in_correct_direction.numpy() else 0, "LC", 1 if largest_change else 0, "CORR", 1 if self.is_correct_decision(t_state, np.argmax(new_q_values)) else 0, "AVG", self.statavg(), "C", sum(abs(diff)),
-                "S", t_state, "A", t_action, "R", t_reward, "O", np.array_str(t_state_q_values.numpy(), precision=2), "T", np.array_str(new_t_state_q_values, precision=2), "U", np.array_str(new_q_values), "D", np.array_str(diff, precision=2), "correctness", correct_dec)
-
-        # train on single instance
-        corr_t = 0
-        for (i, o) in zip(inp, out):
-            if self.is_correct_decision(i, np.argmax(o)):
-                corr_t += 1
-            #print("Training:", i, o, self.is_correct_decision(i, np.argmax(o)))
-        self.corr_t_q.append(corr_t / len(inp))
-        #print("Corr T:", corr_t, "/", len(inp), "Corr T avg:", sum(self.corr_t_q) * 100 / len(self.corr_t_q), "%")
-        #self.q_network.fit(tf.constant(inp), tf.constant(out), epochs=num_epochs, verbose=0)
+            print("TS", self.ts, "CICD", 1 if change_in_correct_direction.numpy() else 0, "LC", 1 if largest_change else 0, "CORR", 1 if self.is_correct_decision(t_state, np.argmax(updated_q_values)) else 0, "AVG", self.statavg(), "C", sum(abs(diff)),
+                "S", t_state, "A", t_action, "R", t_reward, "O", np.array_str(t_state_q_values.numpy(), precision=2), "T", np.array_str(target_t_state_q_values, precision=2), "U", np.array_str(new_t_state_q_values), "D", np.array_str(diff, precision=2), "correctness", correct_dec)
 
     def print_progress_bar(self, percentage):
         str = "|"
