@@ -87,15 +87,15 @@ class RL:
 #        else:
 #            return 0
 
-        if abs(25 - succ_state[self.ax_idx]) < 5 and abs(25 - succ_state[self.ay_idx]) < 5: #abs( #self.is_correct_decision(state, action):
-            return 50
-        elif abs(25 - succ_state[self.ax_idx]) < 15 and abs(25 - succ_state[self.ay_idx]) < 15: #abs( #self.is_correct_decision(state, action):
-            return 10
-        else:
-            return 0
+#        if abs(25 - succ_state[self.ax_idx]) < 5 and abs(25 - succ_state[self.ay_idx]) < 5: #abs( #self.is_correct_decision(state, action):
+#            return 50
+#        elif abs(25 - succ_state[self.ax_idx]) < 15 and abs(25 - succ_state[self.ay_idx]) < 15: #abs( #self.is_correct_decision(state, action):
+#            return 10
+#        else:
+#            return 0
     
         #reward = succ_state[self.ax_idx] + succ_state[self.ay_idx]
-#        reward = (25 - max(abs(25 - succ_state[self.ax_idx]), abs(25 - succ_state[self.ay_idx])))
+        reward = (25 - max(abs(25 - succ_state[self.ax_idx]), abs(25 - succ_state[self.ay_idx])))
         return reward
 
     def format_state(self, state):
@@ -402,8 +402,8 @@ class RL:
         # hyperparameters
         sample_size = 32
         num_epochs = 10
-        alpha_q_learning_rate = 0.5
-        gamma_discout_factor = 0.8
+        alpha_q_learning_rate = 1.0
+        gamma_discout_factor = 0.0
         loss_fn = keras.losses.MeanSquaredError()
 
         if sample_size < 0:
