@@ -20,8 +20,10 @@ class FollowingEnvironment(RLFramework.RLEnvironment):
 
     def get_state_dim(self):
         return 4
+
     def get_action_dim(self):
         return 4
+
     def next(self, state, action):
         # compute next state
         ss = list(state)
@@ -41,16 +43,14 @@ class FollowingEnvironment(RLFramework.RLEnvironment):
             ss[self.STATE_IDX_Y] += 1
             if ss[self.STATE_IDX_Y] >= self.HEIGHT:
                 ss[self.STATE_IDX_Y] = self.HEIGHT - 1
-
         # compute reward
         reward = (max(self.WIDTH, self.HEIGHT) - max(abs(ss[self.STATE_IDX_PX] - ss[self.STATE_IDX_X]), abs(ss[self.STATE_IDX_PY] - ss[self.STATE_IDX_Y])))  # stay with other player
-
         return (ss, reward)
 
     def get_start_state(self):
         return [self.WIDTH / 2, self.HEIGHT / 2, 0, 0]
     
-    def action_to_char(self, action):
+    def __action_to_char(self, action):
         if action == self.AC_LEFT:
             return "<"
         elif action == self.AC_RIGHT:
@@ -61,7 +61,7 @@ class FollowingEnvironment(RLFramework.RLEnvironment):
             return "v"
         return " "
     
-    def visualize(self, state, rlf):
+    def visualize(self, state, rlframework):
         # print field
         print_density = 5
         out = "Current state:\n"
@@ -73,15 +73,15 @@ class FollowingEnvironment(RLFramework.RLEnvironment):
                     out += "O"
                 else:
                     if x % print_density == 0 and y % print_density == 0:
-                        action = rlf.get_action([x, y, state[self.STATE_IDX_PX], state[self.STATE_IDX_PY]])
-                        out += str(self.action_to_char(action))
+                        action = rlframework.get_action([x, y, state[self.STATE_IDX_PX], state[self.STATE_IDX_PY]])
+                        out += str(self.__action_to_char(action))
                     else:
                         out += " "
             out += "\n"
         print(out)
-        print(rlf.get_stats())
+        print(rlframework.get_stats())
 
-    def move_second_player(self, state, action):
+    def __move_second_player(self, state, action):
         # move second player around
         if state[self.STATE_IDX_PX] == 0:
             # go up at left edge
@@ -110,7 +110,7 @@ class FollowingEnvironment(RLFramework.RLEnvironment):
         return state
 
     def environment_change(self, state, action):
-        state = self.move_second_player(state, action)
+        state = self.__move_second_player(state, action)
         return state
 
 if __name__ == "__main__":

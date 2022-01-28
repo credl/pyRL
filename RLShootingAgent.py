@@ -93,7 +93,7 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
             return " "
         return " "
     
-    def visualize(self, state, rlf):
+    def visualize(self, state, rlframework):
         # print field
         print_density = 5
         out = "Current state:\n"
@@ -110,14 +110,14 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
                         out += "*"
                     elif x % print_density == 0 and y % print_density == 0:
                         #action = -1
-                        #action = rlf.get_action([x, y])
-                        action = rlf.get_action([x, y, state[self.STATE_IDX_PX], state[self.STATE_IDX_PY]])
+                        #action = rlframework.get_action([x, y])
+                        action = rlframework.get_action([x, y, state[self.STATE_IDX_PX], state[self.STATE_IDX_PY]])
                         out += str(self.action_to_char(action))
                     else:
                         out += " "
             out += "\n"
         print(out)
-        print(rlf.get_stats())
+        print(rlframework.get_stats())
 
     def agent_shooting(self, state, action):
         if action == self.AC_SHOOT:
