@@ -37,7 +37,7 @@ class RLFramework:
             return []
         def visualize(self, state, rlf):            # show environment (GUI or text output)
             return
-        def environment_change(self, state):        # perform any changes to state other than agent input when going from one frame to the next (e.g. user input)
+        def environment_change(self, state, action):# after agent performed action, perform any changes to state other than agent action when going from one frame to the next (e.g. user input)
             return state
 
     def __init__(self, env, nn_learning_rate: float = 0.01):
@@ -45,19 +45,17 @@ class RLFramework:
 
         # construct_q_network
         self.dqn_q = keras.models.Sequential([
-            keras.layers.Dense(32, activation="elu", input_shape=(env.get_state_dim(),), kernel_initializer='random_normal', bias_initializer='random_normal'),
-            keras.layers.Dense(32, activation="elu", kernel_initializer='random_normal', bias_initializer='random_normal'),
-            keras.layers.Dense(env.get_action_dim(), activation="linear", kernel_initializer='random_normal', bias_initializer='random_normal')
-        ])
-        self.dqn_t = keras.models.Sequential([
-            keras.layers.Dense(32, activation="elu", input_shape=(env.get_state_dim(),), kernel_initializer='random_normal', bias_initializer='random_normal'),
-            keras.layers.Dense(32, activation="elu", kernel_initializer='random_normal', bias_initializer='random_normal'),
+            keras.layers.Dense(128, activation="elu", input_shape=(env.get_state_dim(),), kernel_initializer='random_normal', bias_initializer='random_normal'),
+            keras.layers.Dense(128, activation="elu", kernel_initializer='random_normal', bias_initializer='random_normal'),
+            keras.layers.Dense(128, activation="elu", kernel_initializer='random_normal', bias_initializer='random_normal'),
             keras.layers.Dense(env.get_action_dim(), activation="linear", kernel_initializer='random_normal', bias_initializer='random_normal')
         ])
         self.loss_fn = keras.losses.MeanSquaredError()
         self.opt = tf.keras.optimizers.Adam(learning_rate=nn_learning_rate)
-        self.dqn_t.compile(self.opt, loss=self.loss_fn)
         self.dqn_q.compile(self.opt, loss=self.loss_fn)
+
+        self.dqn_t = tf.keras.models.clone_model(self.dqn_q)
+        self.dqn_t.compile(self.opt, loss=self.loss_fn)
         self.dqn_t.set_weights(self.dqn_q.get_weights())
 
     def get_action(self, state):
@@ -158,7 +156,7 @@ class RLFramework:
 
             # prepare next iteration
             state = succ_state
-            state = self.env.environment_change(state)
+            state = self.env.environment_change(state, action)
             step += 1
             self.additional_stats = ""
 
@@ -170,6 +168,7 @@ class Centering(RLFramework.Environment):
     AC_RIGHT = 1
     AC_UP = 2
     AC_DOWN = 3
+    AC_SHOOT = 4
     
     STATE_IDX_X = 0
     STATE_IDX_Y = 1
@@ -180,8 +179,17 @@ class Centering(RLFramework.Environment):
     HEIGHT = 50
     
     walls = []
+    
+    # shooting mechanics
+    shots = []
+    shotdirs = []
+    last_agent_non_shoot_action = AC_LEFT
 
     def __init__(self):
+        #self.add_walls()
+        pass
+
+    def add_walls(self):
         for x in range(15,30):
             self.walls.append((x, 20))
         for y in range(0,20):
@@ -190,7 +198,7 @@ class Centering(RLFramework.Environment):
     def get_state_dim(self):
         return 4
     def get_action_dim(self):
-        return 4
+        return 5
     def next(self, state, action):
         # compute next state
         ss = list(state)
@@ -218,7 +226,19 @@ class Centering(RLFramework.Environment):
         #reward = (max(self.WIDTH, self.HEIGHT) - max(abs(self.WIDTH / 2 - ss[self.STATE_IDX_X]), abs(self.HEIGHT / 2 - ss[self.STATE_IDX_Y])))  # stay centered
         reward = (max(self.WIDTH, self.HEIGHT) - max(abs(ss[self.STATE_IDX_PX] - ss[self.STATE_IDX_X]), abs(ss[self.STATE_IDX_PY] - ss[self.STATE_IDX_Y])))  # stay with other player
 
+        # additional costs for shoots and reward for hits
+        if action == self.AC_UP:
+            reward -= 100
+        for idx in range(len(self.shots) - 1, -1, -1):
+            if self.does_hit(state, idx):
+                reward += 10000
+
         return (ss, reward)
+
+    def does_hit(self, state, shot_idx):
+        hit_radius = 2
+        (x, y) = self.shots[shot_idx]
+        return abs(x - state[self.STATE_IDX_PX]) < hit_radius and abs(y- state[self.STATE_IDX_PY]) < hit_radius
         
     def get_start_state(self):
         return [self.WIDTH / 2, self.HEIGHT / 2, 0, 0]
@@ -232,6 +252,8 @@ class Centering(RLFramework.Environment):
             return "^"
         elif action == self.AC_DOWN:
             return "v"
+        elif action == self.AC_SHOOT:
+            return " "
         return " "
     
     def visualize(self, state, rlf):
@@ -247,6 +269,8 @@ class Centering(RLFramework.Environment):
                 else:
                     if (x,y) in self.walls:
                         out += "#"
+                    elif (x,y) in self.shots:
+                        out += "*"
                     elif x % print_density == 0 and y % print_density == 0:
                         #action = -1
                         #action = rlf.get_action([x, y])
@@ -258,7 +282,44 @@ class Centering(RLFramework.Environment):
         print(out)
         print(rlf.get_stats())
 
-    def environment_change(self, state):
+    def agent_shooting(self, state, action):
+        if action == self.AC_SHOOT:
+            self.shots.append((state[self.STATE_IDX_X], state[self.STATE_IDX_Y]))
+            self.shotdirs.append(self.last_agent_non_shoot_action)
+        else:
+            self.last_agent_non_shoot_action = action
+        for idx in range(len(self.shots) - 1, -1, -1):
+            if self.does_hit(state, idx):
+                delete = True
+            elif self.shots[idx] in self.walls:
+                delete = True
+            else:
+                (x, y) = self.shots[idx]
+                d = self.shotdirs[idx]
+                delete = False
+                if d == self.AC_LEFT:
+                    x -= 1
+                    if x < 0:
+                        delete = True
+                elif d == self.AC_RIGHT:
+                    x += 1
+                    if x >= self.WIDTH:
+                        delete = True
+                elif d == self.AC_UP:
+                    y -= 1
+                    if y < 0:
+                        delete = True
+                elif d == self.AC_DOWN:
+                    y += 1
+                    if y >= self.HEIGHT:
+                        delete = True
+                self.shots[idx]= (x, y)
+            if delete:
+                del self.shots[idx]
+                del self.shotdirs[idx]
+        return state
+
+    def move_second_player(self, state, action):
         # move second player around
         if state[self.STATE_IDX_PX] == 0:
             # go up at left edge
@@ -284,6 +345,11 @@ class Centering(RLFramework.Environment):
                 state[self.STATE_IDX_PX] = state[self.STATE_IDX_PX] - 1
             else:
                 state[self.STATE_IDX_PY] = state[self.STATE_IDX_PY] - 1
+        return state
+        
+    def environment_change(self, state, action):
+        state = self.agent_shooting(state, action)
+        state = self.move_second_player(state, action)
         return state
 
 if __name__ == "__main__":
