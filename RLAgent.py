@@ -198,7 +198,7 @@ class Centering(RLFramework.Environment):
     def get_state_dim(self):
         return 4
     def get_action_dim(self):
-        return 5
+        return 4
     def next(self, state, action):
         # compute next state
         ss = list(state)
@@ -227,8 +227,8 @@ class Centering(RLFramework.Environment):
         reward = (max(self.WIDTH, self.HEIGHT) - max(abs(ss[self.STATE_IDX_PX] - ss[self.STATE_IDX_X]), abs(ss[self.STATE_IDX_PY] - ss[self.STATE_IDX_Y])))  # stay with other player
 
         # additional costs for shoots and reward for hits
-        if action == self.AC_UP:
-            reward -= 100
+        if action == self.AC_SHOOT:
+            reward -= 20
         for idx in range(len(self.shots) - 1, -1, -1):
             if self.does_hit(state, idx):
                 reward += 10000
