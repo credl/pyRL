@@ -15,26 +15,30 @@ import tensorflow.keras.initializers as initializers
 class RLFramework:
     dqn_q = 0   # deep q network
     dqn_t = 0   # deep q target network
+    stats = 0   # model evaluation
     loss_fn = 0 # nn loss function
     env = 0     # environment
+    additional_stats = "" # statistics output other than provided by tf
 
     class Environment:
-        def get_state_dim(self):
+        def get_state_dim(self):    # number of state dimensions
             return 0
-        def get_action_dim(self):
+        def get_action_dim(self):   # number of actions
             return 0
-        def get_succ_state(self, state, action):
+        def get_succ_state(self, state, action):    # get state after performing an action
             return self.next(state, action)[0]
-        def get_reward(self, state, action):
+        def get_reward(self, state, action):        # get reward if action is performed in state
             return self.next(state, action)[1]
-        def next(self, state, action):
+        def next(self, state, action):              # get successor state and reward after performing action in state
             return ([], 0)
-        def get_start_state(self):
+        def get_start_state(self):                  # get initial state
             return []
-        def get_random_state(self):
+        def get_random_state(self):                 # randomize state
             return []
-        def visualize(self, state, rlf):
+        def visualize(self, state, rlf):            # show environment (GUI or text output)
             return
+        def environment_change(self, state):        # perform any changes to state other than agent input when going from one frame to the next (e.g. user input)
+            return state
 
     def __init__(self, env, nn_learning_rate: float = 0.01):
         self.env = env
@@ -62,12 +66,13 @@ class RLFramework:
 
     def train(self,
                 periods: int = -1,
-                nn_epochs: int = 10,
+                nn_epochs: int = 1,
                 sample_size: int = 32,
                 alpha_q_learning_rate: float = 0.1,
                 gamma_discout_factor: float = 0.7,
-                exploration_rate_start: float = 0.5,
-                exploration_rate_decrease: float = 0.0,
+                exploration_rate_start: float = 0.7,
+                exploration_rate_decrease: float = 0.0001,
+                exploration_rate_min: float = 0.1,
                 replay_buffer_size: int = 2000,
                 accept_q_network_interval: int = 1,
                 random_state_change_probability: float = 0.0,
@@ -81,8 +86,6 @@ class RLFramework:
 
         step = 0
         while not step == periods:
-            step += 1
-
             # state randomization
             if np.random.rand() < random_state_change_probability:
                 state = self.env.get_random_state()
@@ -101,12 +104,13 @@ class RLFramework:
             else:
                 action = np.argmax(q_values)
             # decrease random choices over time
-            if exploration_rate > 0:
+            if exploration_rate > exploration_rate_min:
                 exploration_rate -= exploration_rate_decrease
-                if exploration_rate < 0.0:
-                    exploration_rate = 0
+                if exploration_rate < exploration_rate_min:
+                    exploration_rate = exploration_rate_min
 
             # apply action
+            self.additional_stats += "- Q values: " + str(q_values) + "\n" + "- Best action: " + str(np.argmax(q_values))
             (succ_state, reward) = self.env.next(state, action)
             
             # store current observation in training set
@@ -142,9 +146,7 @@ class RLFramework:
                     out.append(ts_updated_current_q_values)
 
                 # train on all instances
-                self.dqn_q.fit(tf.constant(inp), tf.constant(out), epochs=nn_epochs, verbose=0)
-
-            state = succ_state
+                self.stats = self.dqn_q.fit(tf.constant(inp), tf.constant(out), epochs=nn_epochs, verbose=0)
 
             # accept q network as new target
             if step % accept_q_network_interval == 0:
@@ -154,7 +156,14 @@ class RLFramework:
             if step % visualize_interval == 0:
                 self.env.visualize(state, self)
 
-        return 0
+            # prepare next iteration
+            state = succ_state
+            state = self.env.environment_change(state)
+            step += 1
+            self.additional_stats = ""
+
+    def get_stats(self):
+        return "Statistics:\n" + "- Loss: " + str(self.stats.history['loss'][0]) + "\n" + "Other:\n" + self.additional_stats
 
 class Centering(RLFramework.Environment):
     AC_LEFT = 0
@@ -164,12 +173,14 @@ class Centering(RLFramework.Environment):
     
     STATE_IDX_X = 0
     STATE_IDX_Y = 1
+    STATE_IDX_PX = 2
+    STATE_IDX_PY = 3
     
     WIDTH = 50
     HEIGHT = 50
 
     def get_state_dim(self):
-        return 2
+        return 4
     def get_action_dim(self):
         return 4
     def next(self, state, action):
@@ -193,29 +204,72 @@ class Centering(RLFramework.Environment):
                 ss[self.STATE_IDX_Y] = self.HEIGHT - 1
 
         # compute reward
-        reward = (max(self.WIDTH, self.HEIGHT) - max(abs(self.WIDTH - ss[self.STATE_IDX_X]), abs(self.HEIGHT - ss[self.STATE_IDX_Y])))
+        #reward = (max(self.WIDTH, self.HEIGHT) - max(abs(self.WIDTH / 2 - ss[self.STATE_IDX_X]), abs(self.HEIGHT / 2 - ss[self.STATE_IDX_Y])))  # stay centered
+        reward = (max(self.WIDTH, self.HEIGHT) - max(abs(ss[self.STATE_IDX_PX] - ss[self.STATE_IDX_X]), abs(ss[self.STATE_IDX_PY] - ss[self.STATE_IDX_Y])))  # stay with other player
 
         return (ss, reward)
         
     def get_start_state(self):
-        return [self.WIDTH / 2, self.HEIGHT / 2]
-        
+        return [self.WIDTH / 2, self.HEIGHT / 2, 0, 0]
+    
+    def action_to_char(self, action):
+        if action == self.AC_LEFT:
+            return "<"
+        elif action == self.AC_RIGHT:
+            return ">"
+        elif action == self.AC_UP:
+            return "^"
+        elif action == self.AC_DOWN:
+            return "v"
+        return " "
+    
     def visualize(self, state, rlf):
+        # print field
         print_density = 5
         out = "Current state:\n"
         for y in range(50):
             for x in range(50):
                 if x == state[self.STATE_IDX_X] and y == state[self.STATE_IDX_Y]:
                     out += "X"
+                elif x == state[self.STATE_IDX_PX] and y == state[self.STATE_IDX_PY]:
+                    out += "O"
                 else:
                     if x % print_density == 0 and y % print_density == 0:
-                        action = rlf.get_action([x, y])
-                        out += str(action)
+                        action = -1 #rlf.get_action([x, y])
+                        out += str(self.action_to_char(action))
                     else:
                         out += " "
             out += "\n"
         print(out)
-        return
+        print(rlf.get_stats())
+
+    def environment_change(self, state):
+        # move second player around
+        if state[self.STATE_IDX_PX] == 0:
+            # go up at left edge
+            if state[self.STATE_IDX_PY] > 0:
+                state[self.STATE_IDX_PY] = state[self.STATE_IDX_PY] - 1
+            else:
+                state[self.STATE_IDX_PX] = state[self.STATE_IDX_PX] + 1
+        elif state[self.STATE_IDX_PY] == 0:
+            # go right at top edge
+            if state[self.STATE_IDX_PX] < self.WIDTH - 1:
+                state[self.STATE_IDX_PX] = state[self.STATE_IDX_PX] + 1
+            else:
+                state[self.STATE_IDX_PY] = state[self.STATE_IDX_PY] + 1
+        elif state[self.STATE_IDX_PX] == self.WIDTH - 1:
+            # go down at right edge
+            if state[self.STATE_IDX_PY] < self.HEIGHT - 1:
+                state[self.STATE_IDX_PY] = state[self.STATE_IDX_PY] + 1
+            else:
+                state[self.STATE_IDX_PX] = state[self.STATE_IDX_PX] - 1
+        elif state[self.STATE_IDX_PY] == self.HEIGHT - 1:
+            # go left at bottom edge
+            if state[self.STATE_IDX_PX] > 0:
+                state[self.STATE_IDX_PX] = state[self.STATE_IDX_PX] - 1
+            else:
+                state[self.STATE_IDX_PY] = state[self.STATE_IDX_PY] - 1
+        return state
 
 if __name__ == "__main__":
-    RLFramework(Centering()).train()
+    RLFramework(Centering()).train(visualize_interval=3)
