@@ -38,8 +38,7 @@ class RL:
     
     # quality ensurance
     sliding_corr_pred = []
-    corr_dec = 0
-    inc_dec = 0
+    corr_dec = deque(maxlen=100)
     impr_cnt = 0
     wors_cnt = 0
     pred_corr = 0
@@ -220,9 +219,9 @@ class RL:
 
     def game_loop(self, main_window):
         # hyperparameters
-        exploration_rate_start = 0.5
+        exploration_rate_start = 0.1
         exploration_rate = exploration_rate_start
-        exploration_rate_decrease = 0.0001
+        exploration_rate_decrease = 0.0 #001
         nn_learning_rate = 0.01
         succ_state = [25, 25] #, 0, 0]
         state_dim = 2
@@ -268,10 +267,10 @@ class RL:
             q_values = self.q_network(tf.constant([state]))[0].numpy()
             #print("Decision:", "S", state, "Q", np.array_str(q_values, precision=2), "Best action by Q", self.action_name(np.argmax(q_values)), "ER:", exploration_rate, "CORRECT:", self.corr_dec)
             if self.is_correct_decision(state, np.argmax(q_values)):
-                self.corr_dec += 1
+                self.corr_dec.append(1)
             else:
-                self.inc_dec += 1
-            print("Correctness of NN decisions:", self.corr_dec, "/", self.inc_dec, "(", self.corr_dec * 100 / (self.corr_dec + self.inc_dec), "% correct)")
+                self.corr_dec.append(0)
+            print("Correctness of NN decisions:", sum(self.corr_dec), "/", len(self.corr_dec), "(", sum(self.corr_dec) * 100 / len(self.corr_dec), "% correct)")
 
             # choose action
             epsilon = np.random.rand()
@@ -402,8 +401,8 @@ class RL:
         # hyperparameters
         sample_size = 32
         num_epochs = 10
-        alpha_q_learning_rate = 1.0
-        gamma_discout_factor = 0.0
+        alpha_q_learning_rate = 0.1
+        gamma_discout_factor = 0.7
         loss_fn = keras.losses.MeanSquaredError()
 
         if sample_size < 0:
