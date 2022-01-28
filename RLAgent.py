@@ -110,7 +110,7 @@ class RLFramework:
                     exploration_rate = exploration_rate_min
 
             # apply action
-            self.additional_stats += "- Q values: " + str(q_values) + "\n" + "- Best action: " + str(np.argmax(q_values))
+            self.additional_stats += "- Steps simulated: " + str(step) + "\n" + "- Q values: " + str(q_values) + "\n" + "- Best action: " + str(np.argmax(q_values))
             (succ_state, reward) = self.env.next(state, action)
             
             # store current observation in training set
@@ -178,6 +178,14 @@ class Centering(RLFramework.Environment):
     
     WIDTH = 50
     HEIGHT = 50
+    
+    walls = []
+
+    def __init__(self):
+        for x in range(15,30):
+            self.walls.append((x, 20))
+        for y in range(0,20):
+            self.walls.append((20, y))
 
     def get_state_dim(self):
         return 4
@@ -202,6 +210,9 @@ class Centering(RLFramework.Environment):
             ss[self.STATE_IDX_Y] += 1
             if ss[self.STATE_IDX_Y] >= self.HEIGHT:
                 ss[self.STATE_IDX_Y] = self.HEIGHT - 1
+        # do not cross walls
+        if (ss[self.STATE_IDX_X], ss[self.STATE_IDX_Y]) in self.walls:
+            ss = list(state)
 
         # compute reward
         #reward = (max(self.WIDTH, self.HEIGHT) - max(abs(self.WIDTH / 2 - ss[self.STATE_IDX_X]), abs(self.HEIGHT / 2 - ss[self.STATE_IDX_Y])))  # stay centered
@@ -234,8 +245,12 @@ class Centering(RLFramework.Environment):
                 elif x == state[self.STATE_IDX_PX] and y == state[self.STATE_IDX_PY]:
                     out += "O"
                 else:
-                    if x % print_density == 0 and y % print_density == 0:
-                        action = -1 #rlf.get_action([x, y])
+                    if (x,y) in self.walls:
+                        out += "#"
+                    elif x % print_density == 0 and y % print_density == 0:
+                        #action = -1
+                        #action = rlf.get_action([x, y])
+                        action = rlf.get_action([x, y, state[self.STATE_IDX_PX], state[self.STATE_IDX_PY]])
                         out += str(self.action_to_char(action))
                     else:
                         out += " "
@@ -272,4 +287,4 @@ class Centering(RLFramework.Environment):
         return state
 
 if __name__ == "__main__":
-    RLFramework(Centering()).train(visualize_interval=3)
+    RLFramework(Centering()).train(visualize_interval=1)
