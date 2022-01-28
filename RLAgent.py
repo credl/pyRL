@@ -231,7 +231,7 @@ class Centering(RLFramework.Environment):
             reward -= 20
         for idx in range(len(self.shots) - 1, -1, -1):
             if self.does_hit(state, idx):
-                reward += 10000
+                reward += 1000000
 
         return (ss, reward)
 
