@@ -236,7 +236,7 @@ class Centering(RLFramework.Environment):
         return (ss, reward)
 
     def does_hit(self, state, shot_idx):
-        hit_radius = 2
+        hit_radius = 5
         (x, y) = self.shots[shot_idx]
         return abs(x - state[self.STATE_IDX_PX]) < hit_radius and abs(y- state[self.STATE_IDX_PY]) < hit_radius
         
