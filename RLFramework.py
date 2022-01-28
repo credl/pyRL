@@ -1,36 +1,19 @@
-import os
-import sys
-import keyboard
 import random
-import threading
-import math
 from collections import deque
-import PySimpleGUI as sg
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
-import tensorflow.keras.layers as layers
-import tensorflow.keras.initializers as initializers
 
 class RLEnvironment:
-    def get_state_dim(self):    # number of state dimensions
-        return 0
-    def get_action_dim(self):   # number of actions
-        return 0
-    def get_succ_state(self, state, action):    # get state after performing an action
-        return self.next(state, action)[0]
-    def get_reward(self, state, action):        # get reward if action is performed in state
-        return self.next(state, action)[1]
-    def next(self, state, action):              # get successor state and reward after performing action in state
-        return ([], 0)
-    def get_start_state(self):                  # get initial state
-        return []
-    def get_random_state(self):                 # randomize state
-        return []
-    def visualize(self, state, rlf):            # show environment (GUI or text output)
-        return
-    def environment_change(self, state, action):# after agent performed action, perform any changes to state other than agent action when going from one frame to the next (e.g. user input)
-        return state
+    def get_state_dim(self): return 0                                               # number of state dimensions
+    def get_action_dim(self): return 0                                              # number of actions
+    def get_succ_state(self, state, action): return self.next(state, action)[0]     # get state after performing an action
+    def get_reward(self, state, action): return self.next(state, action)[1]         # get reward if action is performed in state
+    def next(self, state, action): return ([], 0)                                   # get successor state and reward after performing action in state
+    def get_start_state(self): return []                                            # get initial state
+    def get_random_state(self): return []                                           # randomize state
+    def visualize(self, state, rlf): return                                         # show environment (GUI or text output)
+    def environment_change(self, state, action): return state                       # after agent performed action, perform any changes to state other than agent action when going from one frame to the next (e.g. user input)
 
 class RLTrainer:
     dqn_q = None            # deep q network
@@ -64,19 +47,23 @@ class RLTrainer:
         return np.argmax(q_values)
 
     def train(self,
-                periods: int = -1,
+                # nn learning
                 nn_epochs: int = 1,
+                # q learning
                 sample_size: int = 32,
+                training_interval: int = 1,
+                periods: int = -1,
+                replay_buffer_size: int = 2000,
                 alpha_q_learning_rate: float = 0.1,
                 gamma_discout_factor: float = 0.7,
+                accept_q_network_interval: int = 1,
+                # state space exploration
                 exploration_rate_start: float = 0.7,
                 exploration_rate_decrease: float = 0.0001,
                 exploration_rate_min: float = 0.1,
-                replay_buffer_size: int = 2000,
-                accept_q_network_interval: int = 1,
                 random_state_change_probability: float = 0.0,
                 random_state_change_probability_decrease: float = 0.0,
-                training_interval: int = 1,
+                # other
                 visualize_interval: int = 1):
 
         # initialization
