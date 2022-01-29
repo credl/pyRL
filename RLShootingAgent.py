@@ -8,7 +8,7 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
     agent_x: int = 0; agent_y: int = 0; player_x: int = 0; player_y: int = 0
     walls = []
     shots = []; shotdirs = []; last_agent_non_shoot_action = AC_LEFT
-    #CAN_SHOOT = True
+    CAN_SHOOT = False
 
     def __init__(self):
         # set initial state
