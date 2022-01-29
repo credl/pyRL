@@ -11,6 +11,7 @@ class RLEnvironment:
     def get_state(self): return []                                  # get current state; returns current state of environment
     def randomize_state(self): return self.encode_state()           # randomize state; returns get_state() after randomization
     def visualize(self, rlf): return                                # display current state (e.g. GUI or text output)
+    def cont(self): return True                                     # callback to allow for aborting training
 
 class RLTrainer:
     dqn_q = None            # deep q network
@@ -118,7 +119,7 @@ class RLTrainer:
                 self.stats = self.dqn_q.fit(tf.constant(inp), tf.constant(out), epochs=nn_epochs, verbose=0)
 
             # stats update
-            self.additional_stats += "- Steps simulated: " + str(step) + "\n" + "- Q values: " + str(q_values) + "\n" + "- Best action: " + str(np.argmax(q_values))
+            self.additional_stats += "- Steps simulated: " + str(step) + "\n" + "- Q values: " + str(self.__format_list(q_values, precision=3, precomma=5)) + "\n" + "- Best action: " + str(np.argmax(q_values))
 
             # accept q network as new target
             if step % accept_q_network_interval == 0: self.dqn_t.set_weights(self.dqn_q.get_weights())
@@ -130,12 +131,27 @@ class RLTrainer:
             state = succ_state
             step += 1
             self.additional_stats = ""
+            
+            # possibility for aborting
+            if not self.env.cont():
+                step = periods
 
     def get_stats(self):
-        return "Statistics:\n" + "- Loss: " + str(self.stats.history['loss'][0]) + "\n" + "Other:\n" + self.additional_stats
+        return "Statistics:\n" + "- Loss: " + str(self.__format_float(self.stats.history['loss'][0], precision=5)) + "\n" + "Other:\n" + self.additional_stats
         
     def get_network_stats(self):
         s = "Layer shapes:"
         for l in self.dqn_q.layers:
             s += " " + str(l.output_shape)
         return s
+
+    def __format_float(self, number: float, precision: int = 3, precomma: int = -1):
+        if precomma == -1: return ("{:." + str(precision) + "f}").format(number)
+        else: return ("{:" + str(precomma + precision + 1) + "." + str(precision) + "f}").format(number)
+
+    def __format_list(self, li: list, precision: int = 3, precomma: int = -1):
+        nl = "["
+        for f in li:
+            nl += " " + self.__format_float(f, precision, precomma)
+        nl += " ]"
+        return nl

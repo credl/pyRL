@@ -1,6 +1,9 @@
 import tensorflow as tf
 import keras
 import RLFramework
+import MyConsole
+
+cons = MyConsole.MyConsole()
 
 class ShootingEnvironment(RLFramework.RLEnvironment):
     AC_LEFT: int = 0; AC_RIGHT: int = 1; AC_UP: int = 2; AC_DOWN: int = 3; AC_SHOOT: int = 4
@@ -57,7 +60,14 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
                         out += str(self.__action_to_char(rlframework.get_action(self.__encode_state(x, y))))
                     else: out += " "
             out += "\n"
-        print(out, "\n", rlframework.get_stats())
+        cons.erase()
+        cons.myprint(out + "\n" + rlframework.get_stats())
+        cons.refresh()
+
+    def cont(self):
+        c = cons.getch()
+        abort = (c == 27) # 'escape' key
+        return not abort
 
     def __init_walls(self):
         for x in range(15,30):
@@ -161,17 +171,19 @@ if __name__ == "__main__":
     env = ShootingEnvironment()
     net = keras.models.Sequential([
                 tf.keras.layers.Reshape((env.WIDTH, env.HEIGHT, 1)),
-                tf.keras.layers.Conv2D(64, kernel_size=(3, 3), strides=(1, 1), padding='same', activation="relu", input_shape=(1, env.WIDTH, env.HEIGHT)),
+                #tf.keras.layers.Conv2D(64, kernel_size=(3, 3), strides=(1, 1), padding='same', activation="relu", input_shape=(1, env.WIDTH, env.HEIGHT)),
                 tf.keras.layers.MaxPooling2D((2, 2), strides=2),
-                tf.keras.layers.Conv2D(64, kernel_size=(3, 3), strides=(1, 1), padding='same', activation="relu", input_shape=(1, env.WIDTH, env.HEIGHT)),
-                tf.keras.layers.MaxPooling2D((2, 2), strides=2),
-                tf.keras.layers.Conv2D(64, kernel_size=(3, 3), strides=(1, 1), padding='same', activation="relu", input_shape=(1, env.WIDTH, env.HEIGHT)),
-                tf.keras.layers.MaxPooling2D((2, 2), strides=2),
+                #tf.keras.layers.Conv2D(64, kernel_size=(3, 3), strides=(1, 1), padding='same', activation="relu", input_shape=(1, env.WIDTH, env.HEIGHT)),
+                #tf.keras.layers.MaxPooling2D((2, 2), strides=2),
+                #tf.keras.layers.Conv2D(64, kernel_size=(3, 3), strides=(1, 1), padding='same', activation="relu", input_shape=(1, env.WIDTH, env.HEIGHT)),
+                #tf.keras.layers.MaxPooling2D((2, 2), strides=2),
                 keras.layers.Flatten(),
-                keras.layers.Dense(16, activation="elu", input_shape=(env.get_state_dim(),), kernel_initializer='random_normal', bias_initializer='random_normal'),
+                keras.layers.Dense(512, activation="elu", input_shape=(env.get_state_dim(),), kernel_initializer='random_normal', bias_initializer='random_normal'),
                 keras.layers.Dense(env.get_action_dim(), activation="linear", kernel_initializer='random_normal', bias_initializer='random_normal')
             ])
     tr = RLFramework.RLTrainer(env, nn=net)
     tr.get_action(env.get_state())
-    print("Network stats:\n", tr.get_network_stats())
+    cons.myprint("Network stats:\n"  + tr.get_network_stats())
+    cons.refresh()
     tr.train()
+    cons.end()

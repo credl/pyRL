@@ -1,4 +1,7 @@
 import RLFramework
+import MyConsole
+
+cons = MyConsole.MyConsole()
 
 class FollowingEnvironment(RLFramework.RLEnvironment):
     AC_LEFT: int = 0; AC_RIGHT: int = 1; AC_UP: int = 2; AC_DOWN: int = 3; AC_SHOOT: int = 4
@@ -46,7 +49,14 @@ class FollowingEnvironment(RLFramework.RLEnvironment):
                         out += str(self.__action_to_char(rlframework.get_action(self.__encode_state(x, y))))
                     else: out += " "
             out += "\n"
-        print(out, "\n", rlframework.get_stats())
+        cons.erase()
+        cons.myprint(out + "\n" + rlframework.get_stats())
+        cons.refresh()
+
+    def cont(self):
+        c = cons.getch()
+        abort = (c == 27) # 'escape' key
+        return not abort
 
     def __action_to_char(self, action):
         if action == self.AC_LEFT: return "<"
@@ -82,4 +92,10 @@ class FollowingEnvironment(RLFramework.RLEnvironment):
         return y * self.WIDTH + x
 
 if __name__ == "__main__":
-    RLFramework.RLTrainer(FollowingEnvironment()).train()
+    env = FollowingEnvironment()
+    tr = RLFramework.RLTrainer(env)
+    tr.get_action(env.get_state())
+    cons.myprint("Network stats:\n"  + tr.get_network_stats())
+    cons.refresh()
+    tr.train()
+    cons.end()
