@@ -5,15 +5,12 @@ import tensorflow as tf
 import tensorflow.keras as keras
 
 class RLEnvironment:
-    def get_state_dim(self): return 0                                               # number of state dimensions
-    def get_action_dim(self): return 0                                              # number of actions
-    def get_succ_state(self, state, action): return self.next(state, action)[0]     # get state after performing an action
-    def get_reward(self, state, action): return self.next(state, action)[1]         # get reward if action is performed in state
-    def next(self, state, action): return ([], 0)                                   # get successor state and reward after performing action in state
-    def get_start_state(self): return []                                            # get initial state
-    def get_random_state(self): return []                                           # randomize state
-    def visualize(self, state, rlf): return                                         # show environment (GUI or text output)
-    def environment_change(self, state, action): return state                       # after agent performed action, perform any changes to state other than agent action when going from one frame to the next (e.g. user input)
+    def get_state_dim(self): return 0                               # number of state dimensions
+    def get_action_dim(self): return 0                              # number of actions
+    def next(self, action): return ([], 0)                          # get successor state and reward after performing action in current state; returns (get_state() after action, reward)
+    def get_state(self): return []                                  # get current state; returns current state of environment
+    def randomize_state(self): return self.encode_state()           # randomize state; returns get_state() after randomization
+    def visualize(self, rlf): return                                # display current state (e.g. GUI or text output)
 
 class RLTrainer:
     dqn_q = None            # deep q network
@@ -69,7 +66,7 @@ class RLTrainer:
         # initialization
         exploration_rate = exploration_rate_start
         replay_buffer = deque(maxlen=replay_buffer_size)
-        state = self.env.get_start_state()
+        state = self.env.get_state()
 
         # loop training periods
         step = 0
@@ -93,7 +90,7 @@ class RLTrainer:
                 exploration_rate = exploration_rate_min
 
             # apply action to current state
-            (succ_state, reward) = self.env.next(state, action)
+            (succ_state, reward) = self.env.next(action)
             
             # store current observation in replay buffer
             observation = [state, action, succ_state, reward]
@@ -127,11 +124,10 @@ class RLTrainer:
             if step % accept_q_network_interval == 0: self.dqn_t.set_weights(self.dqn_q.get_weights())
 
             # visualize
-            if step % visualize_interval == 0: self.env.visualize(state, self)
+            if step % visualize_interval == 0: self.env.visualize(self)
 
             # prepare next iteration
             state = succ_state
-            state = self.env.environment_change(state, action)
             step += 1
             self.additional_stats = ""
 
