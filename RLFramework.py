@@ -133,3 +133,9 @@ class RLTrainer:
 
     def get_stats(self):
         return "Statistics:\n" + "- Loss: " + str(self.stats.history['loss'][0]) + "\n" + "Other:\n" + self.additional_stats
+        
+    def get_network_stats(self):
+        s = "Layer shapes:"
+        for l in self.dqn_q.layers:
+            s += " " + str(l.output_shape)
+        return s
