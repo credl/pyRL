@@ -181,7 +181,7 @@ if __name__ == "__main__":
                 keras.layers.Dense(512, activation="elu", input_shape=(env.get_state_dim(),), kernel_initializer='random_normal', bias_initializer='random_normal'),
                 keras.layers.Dense(env.get_action_dim(), activation="linear", kernel_initializer='random_normal', bias_initializer='random_normal')
             ])
-    tr = RLFramework.RLTrainer(env, nn=net)
+    tr = RLFramework.RLTrainer(env, nn=net, visualize_interval=1)
     tr.get_action(env.get_state())
     cons.myprint("Network stats:\n"  + tr.get_network_stats())
     cons.refresh()
