@@ -20,10 +20,13 @@ class MyConsole:
         curses.endwin()
 
     def myprint(self, mystr):
-        i = 0
-        for line in mystr.split("\n"):
-            self.stdscr.addstr(i, 0, line)
-            i += 1
+        try:
+            i = 0
+            for line in mystr.split("\n"):
+                self.stdscr.addstr(i, 0, line)
+                i += 1
+        except:
+            pass
 
     def getch(self):
         return self.stdscr.getch()
