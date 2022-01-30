@@ -173,10 +173,10 @@ class RLTrainer:
     def __draw_random_sample(self, replay_buffer, sample_size):
         trainingset_indexes = random.sample(range(len(replay_buffer)), min(sample_size, len(replay_buffer)))
         # get current q-values (current NN prediction) of selected training samples and update them according to observed reward
-        all_states =        tf.constant([ replay_buffer[sample_idx][0] for sample_idx in trainingset_indexes ])
-        all_action_masks =  tf.constant([ tf.one_hot(replay_buffer[sample_idx][1], self.env.get_action_dim()).numpy() for sample_idx in trainingset_indexes ])
-        all_succ_states =   tf.constant([ replay_buffer[sample_idx][2] for sample_idx in trainingset_indexes ])
-        all_rewards =       tf.constant([ replay_buffer[sample_idx][3] for sample_idx in trainingset_indexes ], dtype=tf.float32)
+        all_states          = tf.constant([ replay_buffer[sample_idx][0] for sample_idx in trainingset_indexes ])
+        all_action_masks    = tf.constant([ tf.one_hot(replay_buffer[sample_idx][1], self.env.get_action_dim()).numpy() for sample_idx in trainingset_indexes ])
+        all_succ_states     = tf.constant([ replay_buffer[sample_idx][2] for sample_idx in trainingset_indexes ])
+        all_rewards         = tf.constant([ replay_buffer[sample_idx][3] for sample_idx in trainingset_indexes ], dtype=tf.float32)
         return (all_states, all_action_masks, all_succ_states, all_rewards)
 
     def __format_float(self, number: float, precision: int = 3, precomma: int = -1):
