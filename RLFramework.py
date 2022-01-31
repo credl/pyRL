@@ -45,6 +45,9 @@ class RLTrainer:
     # other
     SETTING_visualize_interval: int = 1
 
+
+    # ### Initialization ###
+
     def __init__(self, env,
                     nn = None,
                     # nn learning
@@ -102,6 +105,9 @@ class RLTrainer:
         # target network is a copy of the q network
         self.dqn_t = tf.keras.models.clone_model(self.dqn_q)
 
+
+    # ### Public Interface ###
+
     def get_action(self, state):
         return np.argmax(self.dqn_q(tf.constant([state]))[0].numpy())
 
@@ -117,7 +123,7 @@ class RLTrainer:
 
         # loop training episodes
         step = 0; self.__start_time("q_learn_loop")
-        while not step == episodes:
+        while (not step == episodes) and (not self.env.abort()):
             self.__log_bm("DQL loop", self.__format_list(self.__end_time("q_learn_loop")))
             self.__log_bm("Steps simulated", str(step))
             self.__start_time("q_learn_loop")
@@ -128,6 +134,7 @@ class RLTrainer:
             (succ_state, reward) = self.env.next(action)
             # store current observation in replay buffer and do training
             replay_buffer.append([state, action, succ_state, reward])
+            # training
             if step % self.SETTING_training_interval == 0:
                 self.__start_time("ov_ql")
                 self.__train_network(replay_buffer)
@@ -143,18 +150,17 @@ class RLTrainer:
             self.__log_bm("Visualization", self.__format_list(self.__get_time_sum("viz")))
             if step % self.SETTING_visualize_interval == 0: self.env.visualize(self, step)
             self.__end_time("viz")
-            # prepare next iteration with the possibility for aborting
+            # prepare next iteration
             state = succ_state; step += 1; self.additional_stats = ""
-            if self.env.abort(): step = periods
 
     def get_stats(self):
         return self.additional_stats
         
     def get_network_stats(self):
-        s = "Layer shapes:"
-        for l in self.dqn_q.layers:
-            s += " " + str(l.output_shape)
-        return s
+        return "Layer shapes: " + " ".join(str(l.output_shape) for l in self.dqn_q.layers)
+
+
+    # ### Training and NN Helper ###
 
     def __state_randomization(self):
         # state randomization with some probability that decreases over time
@@ -169,8 +175,8 @@ class RLTrainer:
         # estimate q values based on current state
         q_values = self.dqn_q(tf.constant([state]))[0].numpy()
         # choose action (possibly by random with some probability that decreases over time)
-        if np.random.rand() < self.exploration_rate: action = np.random.choice(self.env.get_action_dim())
-        else: action = np.argmax(q_values)
+        if np.random.rand() < self.exploration_rate:    action = np.random.choice(self.env.get_action_dim())
+        else:                                           action = np.argmax(q_values)
         self.exploration_rate -= self.SETTING_exploration_rate_decrease
         if self.exploration_rate < self.SETTING_exploration_rate_min:
             self.exploration_rate = self.SETTING_exploration_rate_min
@@ -183,11 +189,11 @@ class RLTrainer:
         all_states_q_values = self.dqn_q(all_states)                                                                                                            # get q values (current network output) for whole training set
         max_q_values_succ_states = tf.reduce_max(self.dqn_t(all_succ_states), axis=1)                                                                           # get maximum q values for all successor states
         all_rewards += self.SETTING_gamma_discout_factor * max_q_values_succ_states                                                                             # add discounted future rewards
-        all_rewards_matrix = all_rewards.numpy().repeat(self.env.get_action_dim()).reshape(-1, self.env.get_action_dim())                                       # transform into matrix form by adding a separate copy of the reward column vector for each action
-        all_states_updated_q_values = all_states_q_values + self.SETTING_alpha_q_learning_rate * (all_rewards_matrix - all_states_q_values) * all_action_masks  # update q values *only* for chosen actions using the action mask
+        all_rewards_matrix = all_rewards.numpy().repeat(self.env.get_action_dim()).reshape(-1, self.env.get_action_dim())                                       # transform rewards vector into matrix (add a separate copy of the vector for each action)
+        all_states_updated_q_values = all_states_q_values + self.SETTING_alpha_q_learning_rate * (all_rewards_matrix - all_states_q_values) * all_action_masks  # update q values **only** for chosen actions (using the action mask)
         # train network
         self.__start_time("nn_train")
-        self.nn_stats = self.dqn_q.fit(all_states, tf.constant(all_states_updated_q_values), epochs=self.SETTING_nn_epochs, verbose=0)                  
+        self.nn_stats = self.dqn_q.fit(all_states, tf.constant(all_states_updated_q_values), epochs=self.SETTING_nn_epochs, verbose=0)                          # actual network training
         self.__log_bm("NN-Training", self.__format_list(self.__end_time("nn_train")))
         self.__log_bm("NN-Training (%Loop)", self.__format_float(self.__get_time_percentage("nn_train", "q_learn_loop")))
 
@@ -200,17 +206,16 @@ class RLTrainer:
         all_rewards         = tf.constant([ replay_buffer[sample_idx][3] for sample_idx in trainingset_indexes ], dtype=tf.float32)
         return (all_states, all_action_masks, all_succ_states, all_rewards)
 
+
+    # ### Logging and Output ###
+
     def __format_float(self, number: float, precision: int = 3, precomma: int = -1):
-        if precomma == -1: return ("{:." + str(precision) + "f}").format(number)
-        else: return ("{:" + str(precomma + precision + 1) + "." + str(precision) + "f}").format(number)
+        if precomma == -1:  return ("{:." + str(precision) + "f}").format(number)
+        else:               return ("{:" + str(precomma + precision + 1) + "." + str(precision) + "f}").format(number)
 
     def __format_list(self, li: list, precision: int = 3, precomma: int = -1):
-        nl = "["
-        for f in li:
-            nl += " " + self.__format_float(f, precision, precomma)
-        nl += " ]"
-        return nl
-        
+        return "[ " + " ".join(self.__format_float(f, precision, precomma) for f in li) + (" " if len(li) > 0 else "") + "]"
+
     def __log(self, txt: str):
         self.additional_stats += ("" if self.additional_stats == "" else "\n") + txt
         
@@ -234,5 +239,5 @@ class RLTrainer:
     def __get_time_percentage(self, num: str, den: str):
         num_v = self.__get_time_sum(num)[1]
         den_v = self.__get_time_sum(den)[1]
-        if den_v > 0: return num_v * 100 / den_v
-        else: return 0.0
+        if den_v > 0:       return num_v * 100 / den_v
+        else:               return 0.0

@@ -83,31 +83,31 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
         for y in range(0,20): self.walls.append((20, y))
 
     def __action_to_char(self, action):
-        if action == self.AC_LEFT: return "<"
-        elif action == self.AC_RIGHT: return ">"
-        elif action == self.AC_UP: return "^"
-        elif action == self.AC_DOWN: return "v"
-        elif action == self.AC_SHOOT: return " "
-        else: return " "
+        if action == self.AC_LEFT:      return "<"
+        elif action == self.AC_RIGHT:   return ">"
+        elif action == self.AC_UP:      return "^"
+        elif action == self.AC_DOWN:    return "v"
+        elif action == self.AC_SHOOT:   return " "
+        else:                           return " "
 
     def __move_player(self):
         # move second player around
         if self.player_x == 0:
             # go up at left edge
-            if self.player_y > 0: self.player_y -= 1
-            else: self.player_x += 1
+            if self.player_y > 0:               self.player_y -= 1
+            else:                               self.player_x += 1
         elif self.player_y == 0:
             # go right at top edge
-            if self.player_x < self.WIDTH - 1: self.player_x += 1
-            else: self.player_y += 1
+            if self.player_x < self.WIDTH - 1:  self.player_x += 1
+            else:                               self.player_y += 1
         elif self.player_x == self.WIDTH - 1:
             # go down at right edge
             if self.player_y < self.HEIGHT - 1: self.player_y += 1
-            else: self.player_x -= 1
+            else:                               self.player_x -= 1
         elif self.player_y == self.HEIGHT - 1:
             # go left at bottom edge
-            if self.player_x > 0: self.player_x -= 1
-            else: self.player_y -= 1
+            if self.player_x > 0:               self.player_x -= 1
+            else:                               self.player_y -= 1
 
     def __shot_movement(self, action):
         add_reward = 0

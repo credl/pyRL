@@ -26,10 +26,10 @@ class FollowingEnvironment(RLFramework.RLEnvironment):
 
     def next(self, action):
         # compute next state
-        if action == self.AC_LEFT: self.agent_x = max(self.agent_x - 1, 0)
-        elif action == self.AC_RIGHT: self.agent_x = min(self.agent_x + 1, self.WIDTH - 1)
-        elif action == self.AC_UP: self.agent_y = max(self.agent_y - 1, 0)
-        elif action == self.AC_DOWN: self.agent_y = min(self.agent_y + 1, self.HEIGHT - 1)
+        if action == self.AC_LEFT:      self.agent_x = max(self.agent_x - 1, 0)
+        elif action == self.AC_RIGHT:   self.agent_x = min(self.agent_x + 1, self.WIDTH - 1)
+        elif action == self.AC_UP:      self.agent_y = max(self.agent_y - 1, 0)
+        elif action == self.AC_DOWN:    self.agent_y = min(self.agent_y + 1, self.HEIGHT - 1)
         # compute reward
         reward = (max(self.WIDTH, self.HEIGHT) - max(abs(self.player_x - self.agent_x), abs(self.player_y - self.agent_y)))  # stay with other player
         # changes to the environment other than agent action
@@ -67,30 +67,30 @@ class FollowingEnvironment(RLFramework.RLEnvironment):
         for ((x, y), a) in zip(coords, actions): self.nn_dec[y][x] = a
 
     def __action_to_char(self, action):
-        if action == self.AC_LEFT: return "<"
-        elif action == self.AC_RIGHT: return ">"
-        elif action == self.AC_UP: return "^"
-        elif action == self.AC_DOWN: return "v"
-        else: return " "
+        if action == self.AC_LEFT:      return "<"
+        elif action == self.AC_RIGHT:   return ">"
+        elif action == self.AC_UP:      return "^"
+        elif action == self.AC_DOWN:    return "v"
+        else:                           return " "
 
     def __move_player(self):
         # move second player around
         if self.player_x == 0:
             # go up at left edge
-            if self.player_y > 0: self.player_y -= 1
-            else: self.player_x += 1
+            if self.player_y > 0:               self.player_y -= 1
+            else:                               self.player_x += 1
         elif self.player_y == 0:
             # go right at top edge
-            if self.player_x < self.WIDTH - 1: self.player_x += 1
-            else: self.player_y += 1
+            if self.player_x < self.WIDTH - 1:  self.player_x += 1
+            else:                               self.player_y += 1
         elif self.player_x == self.WIDTH - 1:
             # go down at right edge
             if self.player_y < self.HEIGHT - 1: self.player_y += 1
-            else: self.player_x -= 1
+            else:                               self.player_x -= 1
         elif self.player_y == self.HEIGHT - 1:
             # go left at bottom edge
-            if self.player_x > 0: self.player_x -= 1
-            else: self.player_y -= 1
+            if self.player_x > 0:               self.player_x -= 1
+            else:                               self.player_y -= 1
 
     def __encode_state(self, agent_pos_x, agent_pos_y):
         # simple encoding of just agent and player positions
