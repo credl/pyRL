@@ -178,9 +178,10 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
     def __encode_state_complex_ndim(self, agent_pos_x, agent_pos_y):
         # complex encoding of the whole field (multidimensional)
         state = [ [0.0] * self.HEIGHT for i in range(self.WIDTH)]
-        state[agent_pos_y][agent_pos_x] = 100
-        state[self.player_y][self.player_x] = 200
-        for (x, y) in self.shots: state[y][x] = 255
+        state[agent_pos_y][agent_pos_x] = 50
+        state[self.player_y][self.player_x] = 100
+        for (x, y) in self.shots: state[y][x] = 150
+        for (x, y) in self.walls: state[y][x] = 200
         return state
 
     def __coord_to_idx(self, x: int, y: int):
@@ -190,19 +191,18 @@ if __name__ == "__main__":
     env = ShootingEnvironment()
     net = keras.models.Sequential([
                 tf.keras.layers.Reshape((env.WIDTH, env.HEIGHT, 1)),
-                #tf.keras.layers.Conv2D(64, kernel_size=(3, 3), strides=(1, 1), padding='same', activation="relu", input_shape=(1, env.WIDTH, env.HEIGHT)),
+                tf.keras.layers.Conv2D(128, kernel_size=(3, 3), strides=(1, 1), padding='same', activation="elu", input_shape=(env.WIDTH, env.HEIGHT)),
                 tf.keras.layers.MaxPooling2D((2, 2), strides=2),
-                #tf.keras.layers.Conv2D(64, kernel_size=(3, 3), strides=(1, 1), padding='same', activation="relu", input_shape=(1, env.WIDTH, env.HEIGHT)),
-                #tf.keras.layers.MaxPooling2D((2, 2), strides=2),
-                #tf.keras.layers.Conv2D(64, kernel_size=(3, 3), strides=(1, 1), padding='same', activation="relu", input_shape=(1, env.WIDTH, env.HEIGHT)),
-                #tf.keras.layers.MaxPooling2D((2, 2), strides=2),
+                tf.keras.layers.Conv2D(128, kernel_size=(3, 3), strides=(1, 1), padding='same', activation="elu", input_shape=(env.WIDTH, env.HEIGHT)),
+                tf.keras.layers.MaxPooling2D((2, 2), strides=2),
                 keras.layers.Flatten(),
-                keras.layers.Dense(512, activation="elu", input_shape=(env.get_state_dim(),), kernel_initializer='random_normal', bias_initializer='random_normal'),
+                keras.layers.Dense(128, activation="elu", input_shape=(env.get_state_dim(),), kernel_initializer='random_normal', bias_initializer='random_normal'),
                 keras.layers.Dense(env.get_action_dim(), activation="linear", kernel_initializer='random_normal', bias_initializer='random_normal')
             ])
     tr = RLFramework.RLTrainer(env, nn=net, visualize_interval=1)
     tr.get_action(env.get_state())
-    cons.myprint("Network stats:\n"  + tr.get_network_stats())
+    print("Network stats:\n"  + tr.get_network_stats())
+    cons.myprint("Network stats:\n" + tr.get_network_stats())
     cons.refresh()
     tr.train()
     cons.end()

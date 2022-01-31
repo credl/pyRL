@@ -1,5 +1,6 @@
 import random
 from collections import deque
+import os
 import time
 import numpy as np
 import tensorflow as tf
@@ -157,7 +158,11 @@ class RLTrainer:
         return self.additional_stats
         
     def get_network_stats(self):
-        return "Layer shapes: " + " ".join(str(l.output_shape) for l in self.dqn_q.layers)
+        s = ""
+        s +=  "Layer shapes: " + " ".join([str(l.output_shape) for l in self.dqn_q.layers]) + "\n"
+        if "CUDA_VISIBLE_DEVICES" in os.environ.keys(): s +=    "CUDA: " + os.environ['CUDA_VISIBLE_DEVICES']
+        else:                                           s +=    "CUDA: CPU"
+        return s
 
 
     # ### Training and NN Helper ###
