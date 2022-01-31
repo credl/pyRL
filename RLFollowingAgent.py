@@ -1,5 +1,6 @@
 import RLFramework
 import MyConsole
+import itertools
 
 cons = MyConsole.MyConsole()
 
@@ -10,7 +11,7 @@ class FollowingEnvironment(RLFramework.RLEnvironment):
     shots = []; shotdirs = []; last_agent_non_shoot_action = AC_LEFT
     nn_dec = None
     viz_print_density = 5
-    viz_nn_update_interval = 50
+    viz_nn_update_interval = 1
 
     def __init__(self):
         # set initial state
@@ -37,35 +38,33 @@ class FollowingEnvironment(RLFramework.RLEnvironment):
 
     def get_state(self):
         return self.__encode_state(self.agent_x, self.agent_y)
-#        return [self.agent_x, self.agent_y, self.player_x, self.player_y]
 
     def visualize(self, rlframework, step):
         out = [ [" "] * self.WIDTH for i in range(self.HEIGHT)]
         # print agent and player
-        out[self.agent_y][self.agent_x] = "X"
-        out[self.player_y][self.player_x] = "O"
         out[0][0] = out[0][self.WIDTH - 1] = out[self.HEIGHT - 1][0] = out[self.HEIGHT - 1][self.WIDTH - 1] = "+"
         # print network decisions
         self.__update_nn_dec(rlframework, step)
-        for x in range(0, self.WIDTH, self.viz_print_density):
-            for y in range(0, self.HEIGHT, self.viz_print_density):
-                out[y][x] = str(self.__action_to_char(self.nn_dec[y][x]))
+        for (x, y) in itertools.product(range(0, self.WIDTH, self.viz_print_density), range(0, self.HEIGHT, self.viz_print_density)):
+            out[y][x] = str(self.__action_to_char(self.nn_dec[y][x]))
+        # print agent and player
+        out[self.agent_y][self.agent_x] = "X"
+        out[self.player_y][self.player_x] = "O"
         # output
         cons.erase()
         cons.myprint("Current state:\n" + cons.matrix_to_string(out) + rlframework.get_stats())
         cons.refresh()
 
-    def cont(self):
-        c = cons.getch()
-        abort = (c == 27) # 'escape' key
-        return not abort
+    def abort(self):
+        return (cons.getch() == 27) # 'escape' key
 
     def __update_nn_dec(self, rlframework, step):
+        if step % self.viz_nn_update_interval > 0: return
         if self.nn_dec == None: self.nn_dec = [ [-1] * self.WIDTH for i in range(self.HEIGHT)]
-        for x in range(0, self.WIDTH, self.viz_print_density):
-            for y in range(0, self.HEIGHT, self.viz_print_density):
-                # periodic update
-                if step % self.viz_nn_update_interval == 0: self.nn_dec[y][x] = rlframework.get_action(self.__encode_state(x, y))
+        coords = list(itertools.product(range(0, self.WIDTH, self.viz_print_density), range(0, self.HEIGHT, self.viz_print_density)))
+        states = [ self.__encode_state(x, y) for (x, y) in coords ]
+        actions = rlframework.get_actions(states)       
+        for ((x, y), a) in zip(coords, actions): self.nn_dec[y][x] = a
 
     def __action_to_char(self, action):
         if action == self.AC_LEFT: return "<"

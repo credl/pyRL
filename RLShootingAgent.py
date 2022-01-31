@@ -2,6 +2,7 @@ import tensorflow as tf
 import keras
 import RLFramework
 import MyConsole
+import itertools
 
 cons = MyConsole.MyConsole()
 
@@ -11,10 +12,10 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
     agent_x: int = 0; agent_y: int = 0; player_x: int = 0; player_y: int = 0
     walls = []
     shots = []; shotdirs = []; last_agent_non_shoot_action = AC_LEFT
-    CAN_SHOOT = True
+    CAN_SHOOT = False
     nn_dec = None
     viz_print_density = 5
-    viz_nn_update_interval = 50
+    viz_nn_update_interval = 1
 
     def __init__(self):
         # set initial state
@@ -50,39 +51,36 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
 
     def visualize(self, rlframework, step):
         out = [ [" "] * self.WIDTH for i in range(self.HEIGHT)]
+        # print shots
+        for (x, y) in self.shots: out[y][x] = "*"
+        # print network decisions
+        self.__update_nn_dec(rlframework, step)
+        for (x, y) in itertools.product(range(0, self.WIDTH, self.viz_print_density), range(0, self.HEIGHT, self.viz_print_density)):
+            out[y][x] = str(self.__action_to_char(self.nn_dec[y][x]))
+        for (x, y) in self.walls: out[y][x] = "#"
         # print agent and player
         out[self.agent_y][self.agent_x] = "X"
         out[self.player_y][self.player_x] = "O"
-        for (x, y) in self.shots: out[y][x] = "*"
-        for (x, y) in self.walls: out[y][x] = "#"
         out[0][0] = out[0][self.WIDTH - 1] = out[self.HEIGHT - 1][0] = out[self.HEIGHT - 1][self.WIDTH - 1] = "+"
-        # print network decisions
-        self.__update_nn_dec(rlframework, step)
-        for x in range(0, self.WIDTH, self.viz_print_density):
-            for y in range(0, self.HEIGHT, self.viz_print_density):
-                out[y][x] = str(self.__action_to_char(self.nn_dec[y][x]))
         # output
         cons.erase()
         cons.myprint("Current state:\n" + cons.matrix_to_string(out) + rlframework.get_stats())
         cons.refresh()
 
-    def cont(self):
-        c = cons.getch()
-        abort = (c == 27) # 'escape' key
-        return not abort
+    def abort(self):
+        return (cons.getch() == 27) # 'escape' key
 
     def __update_nn_dec(self, rlframework, step):
+        if step % self.viz_nn_update_interval > 0: return
         if self.nn_dec == None: self.nn_dec = [ [-1] * self.WIDTH for i in range(self.HEIGHT)]
-        for x in range(0, self.WIDTH, self.viz_print_density):
-            for y in range(0, self.HEIGHT, self.viz_print_density):
-                # periodic update
-                if step % self.viz_nn_update_interval == 0: self.nn_dec[y][x] = rlframework.get_action(self.__encode_state(x, y))
+        coords = list(itertools.product(range(0, self.WIDTH, self.viz_print_density), range(0, self.HEIGHT, self.viz_print_density)))
+        states = [ self.__encode_state(x, y) for (x, y) in coords ]
+        actions = rlframework.get_actions(states)       
+        for ((x, y), a) in zip(coords, actions): self.nn_dec[y][x] = a
 
     def __init_walls(self):
-        for x in range(15,30):
-            self.walls.append((x, 20))
-        for y in range(0,20):
-            self.walls.append((20, y))
+        for x in range(15,30): self.walls.append((x, 20))
+        for y in range(0,20): self.walls.append((20, y))
 
     def __action_to_char(self, action):
         if action == self.AC_LEFT: return "<"

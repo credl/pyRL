@@ -12,7 +12,7 @@ class RLEnvironment:
     def get_state(self): return []                                  # get current state; returns current state of environment
     def randomize_state(self): return self.encode_state()           # randomize state; returns get_state() after randomization
     def visualize(self, rlf): return                                # display current state (e.g. GUI or text output)
-    def cont(self): return True                                     # callback to allow for aborting training
+    def abort(self): return False                                   # callback to allow for aborting training
 
 class RLTrainer:
     dqn_q = None            # deep q network
@@ -105,6 +105,9 @@ class RLTrainer:
     def get_action(self, state):
         return np.argmax(self.dqn_q(tf.constant([state]))[0].numpy())
 
+    def get_actions(self, states):
+        return [ np.argmax(q_values) for q_values in self.dqn_q(tf.constant(states)).numpy()]
+
     def train(self, episodes: int = -1):
         # training initialization
         self.exploration_rate = self.SETTING_exploration_rate_start
@@ -126,10 +129,11 @@ class RLTrainer:
             # store current observation in replay buffer and do training
             replay_buffer.append([state, action, succ_state, reward])
             if step % self.SETTING_training_interval == 0:
-                self.__start_time("ov_train")
+                self.__start_time("ov_ql")
                 self.__train_network(replay_buffer)
                 self.__log_bm("Loss", self.__format_float(self.nn_stats.history['loss'][0], precision=5))
-                self.__log_bm("Overall-Training", self.__format_list(self.__end_time("ov_train")))
+                self.__log_bm("Overall QL", self.__format_list(self.__end_time("ov_ql")))
+                self.__log_bm("Overall QL(%Loop)", self.__format_float(self.__get_time_percentage("ov_ql", "q_learn_loop")))               
             if step % self.SETTING_accept_q_network_interval == 0: self.dqn_t.set_weights(self.dqn_q.get_weights())
             # stats update and visualization
             q_values = self.dqn_q(tf.constant([state]))[0].numpy()
@@ -141,7 +145,7 @@ class RLTrainer:
             self.__end_time("viz")
             # prepare next iteration with the possibility for aborting
             state = succ_state; step += 1; self.additional_stats = ""
-            if not self.env.cont(): step = periods
+            if self.env.abort(): step = periods
 
     def get_stats(self):
         return self.additional_stats
@@ -185,6 +189,7 @@ class RLTrainer:
         self.__start_time("nn_train")
         self.nn_stats = self.dqn_q.fit(all_states, tf.constant(all_states_updated_q_values), epochs=self.SETTING_nn_epochs, verbose=0)                  
         self.__log_bm("NN-Training", self.__format_list(self.__end_time("nn_train")))
+        self.__log_bm("NN-Training (%Loop)", self.__format_float(self.__get_time_percentage("nn_train", "q_learn_loop")))
 
     def __draw_random_sample(self, replay_buffer, sample_size):
         trainingset_indexes = random.sample(range(len(replay_buffer)), min(sample_size, len(replay_buffer)))
@@ -225,3 +230,9 @@ class RLTrainer:
     def __get_time_sum(self, name: str = ""):
         if not name in self.sum_times.keys(): self.sum_times[name] = 0
         return [0.0, self.sum_times[name]]
+        
+    def __get_time_percentage(self, num: str, den: str):
+        num_v = self.__get_time_sum(num)[1]
+        den_v = self.__get_time_sum(den)[1]
+        if den_v > 0: return num_v * 100 / den_v
+        else: return 0.0
