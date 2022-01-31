@@ -1,6 +1,7 @@
 import RLFramework
 import MyConsole
 import itertools
+import numpy as np
 
 cons = MyConsole.MyConsole()
 
@@ -8,6 +9,7 @@ class FollowingEnvironment(RLFramework.RLEnvironment):
     AC_LEFT: int = 0; AC_RIGHT: int = 1; AC_UP: int = 2; AC_DOWN: int = 3; AC_SHOOT: int = 4
     WIDTH: int = 50; HEIGHT: int = 50
     agent_x: int = 0; agent_y: int = 0; player_x: int = 0; player_y: int = 0
+    player_circular_movement = False; player_dir: int = 0; player_change_interval: int = 10; player_move_step: int = 0
     shots = []; shotdirs = []; last_agent_non_shoot_action = AC_LEFT
     nn_dec = None
     viz_print_density = 5
@@ -74,7 +76,10 @@ class FollowingEnvironment(RLFramework.RLEnvironment):
         else:                           return " "
 
     def __move_player(self):
-        # move second player around
+        if self.player_circular_movement:   self.__move_player_circular()
+        else:                               self.__move_player_random()
+
+    def __move_player_circular(self):
         if self.player_x == 0:
             # go up at left edge
             if self.player_y > 0:               self.player_y -= 1
@@ -91,6 +96,14 @@ class FollowingEnvironment(RLFramework.RLEnvironment):
             # go left at bottom edge
             if self.player_x > 0:               self.player_x -= 1
             else:                               self.player_y -= 1
+
+    def __move_player_random(self):
+        if self.player_move_step % self.player_change_interval == 0: self.player_dir = np.random.choice(4)
+        if self.player_dir == self.AC_LEFT:         self.player_x = max(self.player_x - 1, 0)
+        elif self.player_dir == self.AC_RIGHT:      self.player_x = min(self.player_x + 1, self.WIDTH - 1)
+        elif self.player_dir == self.AC_UP:         self.player_y = max(self.player_y - 1, 0)
+        elif self.player_dir == self.AC_DOWN:       self.player_y = min(self.player_y + 1, self.HEIGHT - 1)
+        self.player_move_step += 1
 
     def __encode_state(self, agent_pos_x, agent_pos_y):
         # simple encoding of just agent and player positions

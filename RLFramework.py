@@ -11,7 +11,7 @@ class RLEnvironment:
     def next(self, action): return ([], 0)                          # get successor state and reward after performing action in current state; returns (get_state() after action, reward)
     def get_state(self): return []                                  # get current state; returns current state of environment
     def randomize_state(self): return self.encode_state()           # randomize state; returns get_state() after randomization
-    def visualize(self, rlf): return                                # display current state (e.g. GUI or text output)
+    def visualize(self, rlf, step): return                          # display current state (e.g. GUI or text output)
     def abort(self): return False                                   # callback to allow for aborting training
 
 class RLTrainer:
