@@ -36,3 +36,6 @@ class MyConsole:
 
     def refresh(self):
         self.stdscr.refresh()
+        
+    def matrix_to_string(self, mat):
+        return "".join([ "".join(row) + "\n" for row in mat ])

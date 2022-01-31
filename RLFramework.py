@@ -1,5 +1,6 @@
 import random
 from collections import deque
+import time
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
@@ -20,6 +21,8 @@ class RLTrainer:
     loss_fn = None          # nn loss function
     env = None              # environment
     additional_stats = ""   # statistics output other than provided by tf
+    start_times = dict()    # benchmarking
+    sum_times = dict()      # benchmarking
 
     # settings
     #    nn learning
@@ -110,8 +113,11 @@ class RLTrainer:
         state = self.env.get_state()
 
         # loop training episodes
-        step = 0
+        step = 0; self.__start_time("q_learn_loop")
         while not step == episodes:
+            self.__log_bm("DQL loop", self.__format_list(self.__end_time("q_learn_loop")))
+            self.__log_bm("Steps simulated", str(step))
+            self.__start_time("q_learn_loop")
             # more state space exploration
             self.__state_randomization()
             # choose and apply action to current state
@@ -119,18 +125,26 @@ class RLTrainer:
             (succ_state, reward) = self.env.next(action)
             # store current observation in replay buffer and do training
             replay_buffer.append([state, action, succ_state, reward])
-            if step % self.SETTING_training_interval == 0: self.__train_network(replay_buffer)
+            if step % self.SETTING_training_interval == 0:
+                self.__start_time("ov_train")
+                self.__train_network(replay_buffer)
+                self.__log_bm("Loss", self.__format_float(self.nn_stats.history['loss'][0], precision=5))
+                self.__log_bm("Overall-Training", self.__format_list(self.__end_time("ov_train")))
             if step % self.SETTING_accept_q_network_interval == 0: self.dqn_t.set_weights(self.dqn_q.get_weights())
             # stats update and visualization
             q_values = self.dqn_q(tf.constant([state]))[0].numpy()
-            self.additional_stats += "- Steps simulated: " + str(step) + "\n" + "- Q values: " + str(self.__format_list(q_values, precision=3, precomma=5)) + "\n" + "- Best action: " + str(np.argmax(q_values))
-            if step % self.SETTING_visualize_interval == 0: self.env.visualize(self)
+            self.__log_bm("Q values", str(self.__format_list(q_values, precision=3, precomma=5)))
+            self.__log_bm("Best action", str(np.argmax(q_values)))
+            self.__start_time("viz")
+            self.__log_bm("Visualization", self.__format_list(self.__get_time_sum("viz")))
+            if step % self.SETTING_visualize_interval == 0: self.env.visualize(self, step)
+            self.__end_time("viz")
             # prepare next iteration with the possibility for aborting
             state = succ_state; step += 1; self.additional_stats = ""
             if not self.env.cont(): step = periods
 
     def get_stats(self):
-        return "Statistics:\n" + "- Loss: " + str(self.__format_float(self.nn_stats.history['loss'][0], precision=5)) + "\n" + "Other:\n" + self.additional_stats
+        return self.additional_stats
         
     def get_network_stats(self):
         s = "Layer shapes:"
@@ -168,7 +182,9 @@ class RLTrainer:
         all_rewards_matrix = all_rewards.numpy().repeat(self.env.get_action_dim()).reshape(-1, self.env.get_action_dim())                                       # transform into matrix form by adding a separate copy of the reward column vector for each action
         all_states_updated_q_values = all_states_q_values + self.SETTING_alpha_q_learning_rate * (all_rewards_matrix - all_states_q_values) * all_action_masks  # update q values *only* for chosen actions using the action mask
         # train network
+        self.__start_time("nn_train")
         self.nn_stats = self.dqn_q.fit(all_states, tf.constant(all_states_updated_q_values), epochs=self.SETTING_nn_epochs, verbose=0)                  
+        self.__log_bm("NN-Training", self.__format_list(self.__end_time("nn_train")))
 
     def __draw_random_sample(self, replay_buffer, sample_size):
         trainingset_indexes = random.sample(range(len(replay_buffer)), min(sample_size, len(replay_buffer)))
@@ -189,3 +205,23 @@ class RLTrainer:
             nl += " " + self.__format_float(f, precision, precomma)
         nl += " ]"
         return nl
+        
+    def __log(self, txt: str):
+        self.additional_stats += ("" if self.additional_stats == "" else "\n") + txt
+        
+    def __log_bm(self, key: str, val: str, padlen: int = 20):
+        self.__log("- " + key.rjust(padlen, " ") + ": " + val)
+        
+    def __start_time(self, name: str = ""):
+        self.start_times[name] = time.time()
+
+    def __end_time(self, name: str = ""):
+        end = time.time()
+        elapsed = end - self.start_times[name]
+        if not name in self.sum_times.keys(): self.sum_times[name] = 0
+        self.sum_times[name] += elapsed
+        return [elapsed, self.sum_times[name]]
+
+    def __get_time_sum(self, name: str = ""):
+        if not name in self.sum_times.keys(): self.sum_times[name] = 0
+        return [0.0, self.sum_times[name]]

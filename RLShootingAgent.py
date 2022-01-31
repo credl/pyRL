@@ -11,7 +11,10 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
     agent_x: int = 0; agent_y: int = 0; player_x: int = 0; player_y: int = 0
     walls = []
     shots = []; shotdirs = []; last_agent_non_shoot_action = AC_LEFT
-    CAN_SHOOT = False
+    CAN_SHOOT = True
+    nn_dec = None
+    viz_print_density = 5
+    viz_nn_update_interval = 50
 
     def __init__(self):
         # set initial state
@@ -45,29 +48,35 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
     def get_state(self):
         return self.__encode_state(self.agent_x, self.agent_y)
 
-    def visualize(self, rlframework):
-        # print field
-        print_density = 5
-        out = "Current state:\n"
-        for y in range(50):
-            for x in range(50):
-                if (x, y) in self.walls: out += "#"
-                elif (x, y) in self.shots: out += "*"
-                elif (x, y) == (self.agent_x, self.agent_y): out += "X"
-                elif (x, y) == (self.player_x, self.player_y): out += "O"
-                else:
-                    if x % print_density == 0 and y % print_density == 0:
-                        out += str(self.__action_to_char(rlframework.get_action(self.__encode_state(x, y))))
-                    else: out += " "
-            out += "\n"
+    def visualize(self, rlframework, step):
+        out = [ [" "] * self.WIDTH for i in range(self.HEIGHT)]
+        # print agent and player
+        out[self.agent_y][self.agent_x] = "X"
+        out[self.player_y][self.player_x] = "O"
+        for (x, y) in self.shots: out[y][x] = "*"
+        for (x, y) in self.walls: out[y][x] = "#"
+        out[0][0] = out[0][self.WIDTH - 1] = out[self.HEIGHT - 1][0] = out[self.HEIGHT - 1][self.WIDTH - 1] = "+"
+        # print network decisions
+        self.__update_nn_dec(rlframework, step)
+        for x in range(0, self.WIDTH, self.viz_print_density):
+            for y in range(0, self.HEIGHT, self.viz_print_density):
+                out[y][x] = str(self.__action_to_char(self.nn_dec[y][x]))
+        # output
         cons.erase()
-        cons.myprint(out + "\n" + rlframework.get_stats())
+        cons.myprint("Current state:\n" + cons.matrix_to_string(out) + rlframework.get_stats())
         cons.refresh()
 
     def cont(self):
         c = cons.getch()
         abort = (c == 27) # 'escape' key
         return not abort
+
+    def __update_nn_dec(self, rlframework, step):
+        if self.nn_dec == None: self.nn_dec = [ [-1] * self.WIDTH for i in range(self.HEIGHT)]
+        for x in range(0, self.WIDTH, self.viz_print_density):
+            for y in range(0, self.HEIGHT, self.viz_print_density):
+                # periodic update
+                if step % self.viz_nn_update_interval == 0: self.nn_dec[y][x] = rlframework.get_action(self.__encode_state(x, y))
 
     def __init_walls(self):
         for x in range(15,30):
