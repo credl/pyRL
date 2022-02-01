@@ -3,6 +3,7 @@ import keras
 import RLFramework
 import MyConsole
 import itertools
+import numpy as np
 
 cons = MyConsole.MyConsole()
 
@@ -16,7 +17,7 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
     CAN_SHOOT = False
     nn_dec = None
     viz_print_density = 5
-    viz_nn_update_interval = 1
+    viz_nn_update_interval = 100
 
     def __init__(self):
         # set initial state
@@ -126,13 +127,13 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
         if action == self.AC_SHOOT:
             self.shots.append((self.agent_x, self.agent_y))
             self.shotdirs.append(self.last_agent_non_shoot_action)
-            add_reward -= 20
+            add_reward -= 1000
         else:
             self.last_agent_non_shoot_action = action
         for idx in range(len(self.shots) - 1, -1, -1):
             if self.__does_hit(idx):
                 delete = True
-                add_reward += 1000000
+                add_reward += 10000
             elif self.shots[idx] in self.walls:
                 delete = True
             else:
@@ -177,11 +178,11 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
         
     def __encode_state_complex_ndim(self, agent_pos_x, agent_pos_y):
         # complex encoding of the whole field (multidimensional)
-        state = [ [0.0] * self.HEIGHT for i in range(self.WIDTH)]
-        state[agent_pos_y][agent_pos_x] = 50
-        state[self.player_y][self.player_x] = 100
-        for (x, y) in self.shots: state[y][x] = 150
-        for (x, y) in self.walls: state[y][x] = 200
+        state = [ [ [0.0, 0.0, 0.0] for j in range(self.HEIGHT) ] for i in range(self.WIDTH)]
+        state[agent_pos_y][agent_pos_x][0] = 255
+        state[self.player_y][self.player_x][1] = 255
+        for (x, y) in self.shots: state[y][x][2] = 255
+        for (x, y) in self.walls: state[y][x][2] = 100
         return state
 
     def __coord_to_idx(self, x: int, y: int):
@@ -190,13 +191,13 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
 if __name__ == "__main__":
     env = ShootingEnvironment()
     net = keras.models.Sequential([
-                tf.keras.layers.Reshape((env.WIDTH, env.HEIGHT, 1)),
-                tf.keras.layers.Conv2D(128, kernel_size=(3, 3), strides=(1, 1), padding='same', activation="elu", input_shape=(env.WIDTH, env.HEIGHT)),
+                tf.keras.layers.Reshape((env.WIDTH, env.HEIGHT, 3)),
+                tf.keras.layers.Conv2D(32, kernel_size=(3, 3), strides=(1, 1), padding='same', activation="elu", input_shape=(env.WIDTH, env.HEIGHT)),
                 tf.keras.layers.MaxPooling2D((2, 2), strides=2),
-                tf.keras.layers.Conv2D(128, kernel_size=(3, 3), strides=(1, 1), padding='same', activation="elu", input_shape=(env.WIDTH, env.HEIGHT)),
+                tf.keras.layers.Conv2D(32, kernel_size=(3, 3), strides=(1, 1), padding='same', activation="elu", input_shape=(env.WIDTH, env.HEIGHT)),
                 tf.keras.layers.MaxPooling2D((2, 2), strides=2),
                 keras.layers.Flatten(),
-                keras.layers.Dense(128, activation="elu", input_shape=(env.get_state_dim(),), kernel_initializer='random_normal', bias_initializer='random_normal'),
+                keras.layers.Dense(64, activation="elu", input_shape=(env.get_state_dim(),), kernel_initializer='random_normal', bias_initializer='random_normal'),
                 keras.layers.Dense(env.get_action_dim(), activation="linear", kernel_initializer='random_normal', bias_initializer='random_normal')
             ])
     tr = RLFramework.RLTrainer(env, nn=net, visualize_interval=1)

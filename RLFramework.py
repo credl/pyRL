@@ -110,10 +110,16 @@ class RLTrainer:
     # ### Public Interface ###
 
     def get_action(self, state):
-        return np.argmax(self.dqn_q(tf.constant([state]))[0].numpy())
+        self.__start_time("nn_query")
+        ac = np.argmax(self.dqn_q(tf.constant([state]))[0].numpy())
+        self.__end_time("nn_query")
+        return ac
 
     def get_actions(self, states):
-        return [ np.argmax(q_values) for q_values in self.dqn_q(tf.constant(states)).numpy()]
+        self.__start_time("nn_query")
+        ac = [ np.argmax(q_values) for q_values in self.dqn_q(tf.constant(states)).numpy()]
+        self.__end_time("nn_query")
+        return ac
 
     def train(self, episodes: int = -1):
         # training initialization
@@ -132,9 +138,13 @@ class RLTrainer:
             self.__state_randomization()
             # choose and apply action to current state
             action = self.__choose_action(state)
+            self.__start_time("action_exec")
             (succ_state, reward) = self.env.next(action)
+            self.__log_bm("Action exec.", self.__format_list(self.__end_time("action_exec")))  
             # store current observation in replay buffer and do training
+            self.__start_time("repl_buf_append")
             replay_buffer.append([state, action, succ_state, reward])
+            self.__log_bm("Repl.Buf.App.", self.__format_list(self.__end_time("repl_buf_append")))  
             # training
             if step % self.SETTING_training_interval == 0:
                 self.__start_time("ov_ql")
@@ -144,7 +154,9 @@ class RLTrainer:
                 self.__log_bm("Overall QL(%Loop)", self.__format_float(self.__get_time_percentage("ov_ql", "q_learn_loop")))               
             if step % self.SETTING_accept_q_network_interval == 0: self.dqn_t.set_weights(self.dqn_q.get_weights())
             # stats update and visualization
+            self.__start_time("nn_query")
             q_values = self.dqn_q(tf.constant([state]))[0].numpy()
+            self.__end_time("nn_query")
             self.__log_bm("Q values", str(self.__format_list(q_values, precision=3, precomma=5)))
             self.__log_bm("Best action", str(np.argmax(q_values)))
             self.__start_time("viz")
@@ -178,7 +190,9 @@ class RLTrainer:
 
     def __choose_action(self, state):
         # estimate q values based on current state
+        self.__start_time("nn_query")
         q_values = self.dqn_q(tf.constant([state]))[0].numpy()
+        self.__end_time("nn_query")
         # choose action (possibly by random with some probability that decreases over time)
         if np.random.rand() < self.exploration_rate:    action = np.random.choice(self.env.get_action_dim())
         else:                                           action = np.argmax(q_values)
@@ -191,8 +205,10 @@ class RLTrainer:
         # draw random training set from replay buffer
         (all_states, all_action_masks, all_succ_states, all_rewards) = self.__draw_random_sample(replay_buffer, self.SETTING_sample_size)
         # compute updated q values for the selected training samples (Bellman Equation)
+        self.__start_time("nn_query")
         all_states_q_values = self.dqn_q(all_states)                                                                                                            # get q values (current network output) for whole training set
         max_q_values_succ_states = tf.reduce_max(self.dqn_t(all_succ_states), axis=1)                                                                           # get maximum q values for all successor states
+        self.__end_time("nn_query")
         all_rewards += self.SETTING_gamma_discout_factor * max_q_values_succ_states                                                                             # add discounted future rewards
         all_rewards_matrix = all_rewards.numpy().repeat(self.env.get_action_dim()).reshape(-1, self.env.get_action_dim())                                       # transform rewards vector into matrix (add a separate copy of the vector for each action)
         all_states_updated_q_values = all_states_q_values + self.SETTING_alpha_q_learning_rate * (all_rewards_matrix - all_states_q_values) * all_action_masks  # update q values **only** for chosen actions (using the action mask)
@@ -201,6 +217,8 @@ class RLTrainer:
         self.nn_stats = self.dqn_q.fit(all_states, tf.constant(all_states_updated_q_values), epochs=self.SETTING_nn_epochs, verbose=0)                          # actual network training
         self.__log_bm("NN-Training", self.__format_list(self.__end_time("nn_train")))
         self.__log_bm("NN-Training (%Loop)", self.__format_float(self.__get_time_percentage("nn_train", "q_learn_loop")))
+        self.__log_bm("NN-Query", self.__format_list(self.__get_time_sum("nn_query")))
+        self.__log_bm("NN-Query (%Loop)", self.__format_float(self.__get_time_percentage("nn_query", "q_learn_loop")))
 
     def __draw_random_sample(self, replay_buffer, sample_size):
         trainingset_indexes = random.sample(range(len(replay_buffer)), min(sample_size, len(replay_buffer)))
