@@ -138,13 +138,9 @@ class RLTrainer:
             self.__state_randomization()
             # choose and apply action to current state
             action = self.__choose_action(state)
-            self.__start_time("action_exec")
             (succ_state, reward) = self.env.next(action)
-            self.__log_bm("Action exec.", self.__format_list(self.__end_time("action_exec")))  
             # store current observation in replay buffer and do training
-            self.__start_time("repl_buf_append")
             replay_buffer.append([state, action, succ_state, reward])
-            self.__log_bm("Repl.Buf.App.", self.__format_list(self.__end_time("repl_buf_append")))  
             # training
             if step % self.SETTING_training_interval == 0:
                 self.__start_time("ov_ql")
