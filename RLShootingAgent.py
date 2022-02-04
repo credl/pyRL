@@ -4,6 +4,7 @@ import RLFramework
 import MyConsole
 import itertools
 import numpy as np
+from collections import deque
 
 cons = MyConsole.MyConsole()
 
@@ -18,6 +19,8 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
     nn_dec = None
     viz_print_density = 5
     viz_nn_update_interval = 100
+    state_stacking = 3
+    prev_states = deque(maxlen=state_stacking)
 
     def __init__(self):
         # set initial state
@@ -75,6 +78,7 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
     def __update_nn_dec(self, rlframework, step):
         if step % self.viz_nn_update_interval > 0: return
         if self.nn_dec == None: self.nn_dec = [ [-1] * self.WIDTH for i in range(self.HEIGHT)]
+        if self.state_stacking > 1: return
         coords = list(itertools.product(range(0, self.WIDTH, self.viz_print_density), range(0, self.HEIGHT, self.viz_print_density)))
         states = [ self.__encode_state(x, y) for (x, y) in coords ]
         actions = rlframework.get_actions(states)       
@@ -160,9 +164,17 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
         hit_radius = 5
         (x, y) = self.shots[shot_idx]
         return abs(x - self.player_x) <= hit_radius and abs(y- self.player_y) <= hit_radius
-    
+
     def __encode_state(self, agent_pos_x, agent_pos_y):
-        return self.__encode_state_complex_ndim(agent_pos_x, agent_pos_y)
+        state = self.__encode_state_complex_ndim(agent_pos_x, agent_pos_y)
+        if self.state_stacking > 1:
+            self.prev_states.append(state)
+            if len(self.prev_states) == self.state_stacking:
+                return list(self.prev_states)
+            else:
+                return [ state for i in range(self.state_stacking) ]
+        else:
+            return state
 
     def __encode_state_simple(self, agent_pos_x, agent_pos_y):
         # simple encoding of just agent and player positions
@@ -191,17 +203,19 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
 if __name__ == "__main__":
     env = ShootingEnvironment()
     net = keras.models.Sequential([
-                tf.keras.layers.Reshape((env.WIDTH, env.HEIGHT, 3)),
-                tf.keras.layers.Conv2D(32, kernel_size=(3, 3), strides=(1, 1), padding='same', activation="elu", input_shape=(env.WIDTH, env.HEIGHT)),
-                tf.keras.layers.MaxPooling2D((2, 2), strides=2),
-                tf.keras.layers.Conv2D(32, kernel_size=(3, 3), strides=(1, 1), padding='same', activation="elu", input_shape=(env.WIDTH, env.HEIGHT)),
-                tf.keras.layers.MaxPooling2D((2, 2), strides=2),
+                #tf.keras.layers.Reshape((3, env.WIDTH, env.HEIGHT, 3), input_shape=(3, env.WIDTH, env.HEIGHT, 3)),
+                tf.keras.layers.Conv2D(64, kernel_size=(4, 4), strides=(2, 2), padding='same', activation="relu"),
+                #tf.keras.layers.MaxPooling2D((2, 2), strides=2),
+                tf.keras.layers.Conv2D(32, kernel_size=(3, 3), strides=(1, 1), padding='same', activation="relu"),
+                #tf.keras.layers.MaxPooling2D((2, 2), strides=2),
+                tf.keras.layers.Conv2D(32, kernel_size=(3, 3), strides=(1, 1), padding='same', activation="relu"),
                 keras.layers.Flatten(),
-                keras.layers.Dense(64, activation="elu", input_shape=(env.get_state_dim(),), kernel_initializer='random_normal', bias_initializer='random_normal'),
+                keras.layers.Dense(64, activation="elu", kernel_initializer='random_normal', bias_initializer='random_normal'),
                 keras.layers.Dense(env.get_action_dim(), activation="linear", kernel_initializer='random_normal', bias_initializer='random_normal')
             ])
     tr = RLFramework.RLTrainer(env, nn=net, visualize_interval=1)
     tr.get_action(env.get_state())
+    print(env.get_state_dim())
     print("Network stats:\n"  + tr.get_network_stats())
     cons.myprint("Network stats:\n" + tr.get_network_stats())
     cons.refresh()
