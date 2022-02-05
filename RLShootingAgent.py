@@ -215,7 +215,7 @@ if __name__ == "__main__":
                 keras.layers.Dense(32, activation="relu", kernel_initializer='random_normal', bias_initializer='random_normal'),
                 keras.layers.Dense(env.get_action_dim(), activation="linear", kernel_initializer='random_normal', bias_initializer='random_normal')
             ])
-    tr = RLFramework.RLTrainer(env, nn=net, nn_learning_rate=0.1, alpha_q_learning_rate=0.2, exploration_rate_start=1.0, exploration_rate_decrease=0.000001, visualize_interval=1, load_path="./RLShootingAgent_trained.h5", save_path="./RLShootingAgent_trained.h5", save_interval=10)
+    tr = RLFramework.RLTrainer(env, nn=net, nn_learning_rate=0.1, alpha_q_learning_rate=0.2, exploration_rate_start=1.0, exploration_rate_decrease=0.000001, visualize_interval=1, load_path="./RLShootingAgent_trained.h5", save_path="./RLShootingAgent_trained.h5", save_interval=1000)
     tr.get_action(env.get_state())
     print(env.get_state_dim())
     print("Network stats:\n"  + tr.get_network_stats())
