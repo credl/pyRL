@@ -114,7 +114,7 @@ class FollowingEnvironment(RLFramework.RLEnvironment):
 
 if __name__ == "__main__":
     env = FollowingEnvironment()
-    tr = RLFramework.RLTrainer(env, visualize_interval=1)
+    tr = RLFramework.RLTrainer(env, visualize_interval=1, load_path="./RLFollowingAgent_trained.h5", save_path="./RLFollowingAgent_trained.h5", save_interval=10)
     tr.get_action(env.get_state())
     print("Network stats:\n"  + tr.get_network_stats())
     cons.myprint("Network stats:\n" + tr.get_network_stats())

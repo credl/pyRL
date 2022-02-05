@@ -45,7 +45,10 @@ class RLTrainer:
     SETTING_random_state_change_probability_decrease: float = 0.0,
     # other
     SETTING_visualize_interval: int = 1
-
+    # model load and save
+    SETTING_save_interval = -1
+    SETTING_save_path = None
+    SETTING_load_path = None
 
     # ### Initialization ###
 
@@ -68,6 +71,10 @@ class RLTrainer:
                     random_state_change_probability_start: float = 0.0,
                     random_state_change_probability_decrease: float = 0.0,
                     random_state_change_probability_min: float = 0.0,
+                    # model load and save
+                    save_interval: int = -1,
+                    save_path: str = None,
+                    load_path: str = None,
                     # other
                     visualize_interval: int = 1
                     ):
@@ -89,6 +96,9 @@ class RLTrainer:
         self.SETTING_random_state_change_probability_decrease = random_state_change_probability_decrease
         self.SETTING_random_state_change_probability_min = random_state_change_probability_min
         self.SETTING_visualize_interval = visualize_interval
+        self.SETTING_save_interval = save_interval
+        self.SETTING_save_path = save_path
+        self.SETTING_load_path = save_path
 
         # construct q network
         if nn == None: # use default network if none provided by caller
@@ -102,6 +112,13 @@ class RLTrainer:
         self.loss_fn = keras.losses.MeanSquaredError()
         self.opt = tf.keras.optimizers.Adam(learning_rate=self.SETTING_nn_learning_rate)
         self.dqn_q.compile(self.opt, loss=self.loss_fn)
+        if not self.SETTING_load_path == None:
+            self.dqn_q(tf.constant([env.get_state()]))
+            try:
+                self.dqn_q.load_weights(self.SETTING_load_path)
+                print("Loaded model weights from file", self.SETTING_load_path)
+            except:
+                print("Could not load model from file", self.SETTING_load_path, "; continue with random weights")
 
         # target network is a copy of the q network
         self.dqn_t = tf.keras.models.clone_model(self.dqn_q)
@@ -155,6 +172,9 @@ class RLTrainer:
             self.__end_time("nn_query")
             self.__log_bm("Q values", str(self.__format_list(q_values, precision=3, precomma=5)))
             self.__log_bm("Best action", str(np.argmax(q_values)))
+            self.__start_time("save")
+            if (not self.SETTING_save_path == None) and (step % self.SETTING_save_interval == 0): self.dqn_t.save_weights(self.SETTING_save_path, overwrite=True, save_format=None, options=None)
+            self.__log_bm("Model save", self.__format_list(self.__end_time("save")))
             self.__start_time("viz")
             self.__log_bm("Visualization", self.__format_list(self.__get_time_sum("viz")))
             if step % self.SETTING_visualize_interval == 0: self.env.visualize(self, step)
