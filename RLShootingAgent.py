@@ -12,14 +12,14 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
     AC_LEFT: int = 0; AC_RIGHT: int = 1; AC_UP: int = 2; AC_DOWN: int = 3; AC_SHOOT: int = 4
     WIDTH: int = 50; HEIGHT: int = 50
     agent_x: int = 0; agent_y: int = 0; player_x: int = 0; player_y: int = 0
-    player_circular_movement = True; player_dir: int = 0; player_change_interval: int = 10; player_move_step: int = 0
+    player_circular_movement = False; player_dir: int = 0; player_change_interval: int = 10; player_move_step: int = 0
     walls = []
     shots = []; shotdirs = []; last_agent_non_shoot_action = AC_LEFT
     CAN_SHOOT = False
     nn_dec = None
     viz_print_density = 5
     viz_nn_update_interval = 100
-    state_stacking = 3
+    state_stacking = 1
     prev_states = deque(maxlen=state_stacking)
 
     def __init__(self):
@@ -204,16 +204,18 @@ if __name__ == "__main__":
     env = ShootingEnvironment()
     net = keras.models.Sequential([
                 #tf.keras.layers.Reshape((3, env.WIDTH, env.HEIGHT, 3), input_shape=(3, env.WIDTH, env.HEIGHT, 3)),
-                tf.keras.layers.Conv2D(64, kernel_size=(4, 4), strides=(2, 2), padding='same', activation="relu"),
+#                tf.keras.layers.Conv2D(32, kernel_size=(8, 8), strides=(4, 4), padding='same', activation="relu"),
                 #tf.keras.layers.MaxPooling2D((2, 2), strides=2),
-                tf.keras.layers.Conv2D(32, kernel_size=(3, 3), strides=(1, 1), padding='same', activation="relu"),
+#                tf.keras.layers.Conv2D(64, kernel_size=(4, 4), strides=(2, 2), padding='same', activation="relu"),
                 #tf.keras.layers.MaxPooling2D((2, 2), strides=2),
-                tf.keras.layers.Conv2D(32, kernel_size=(3, 3), strides=(1, 1), padding='same', activation="relu"),
+#                tf.keras.layers.Conv2D(64, kernel_size=(3, 3), strides=(1, 1), padding='same', activation="relu"),
                 keras.layers.Flatten(),
-                keras.layers.Dense(64, activation="elu", kernel_initializer='random_normal', bias_initializer='random_normal'),
+                keras.layers.Dense(64, activation="relu", kernel_initializer='random_normal', bias_initializer='random_normal'),
+                keras.layers.Dense(32, activation="relu", kernel_initializer='random_normal', bias_initializer='random_normal'),
+                keras.layers.Dense(32, activation="relu", kernel_initializer='random_normal', bias_initializer='random_normal'),
                 keras.layers.Dense(env.get_action_dim(), activation="linear", kernel_initializer='random_normal', bias_initializer='random_normal')
             ])
-    tr = RLFramework.RLTrainer(env, nn=net, visualize_interval=1)
+    tr = RLFramework.RLTrainer(env, nn=net, nn_learning_rate=0.1, alpha_q_learning_rate=0.2, exploration_rate_start=1.0, exploration_rate_decrease=0.000001, visualize_interval=1)
     tr.get_action(env.get_state())
     print(env.get_state_dim())
     print("Network stats:\n"  + tr.get_network_stats())
