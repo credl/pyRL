@@ -167,7 +167,7 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
         return abs(x - self.player_x) <= hit_radius and abs(y- self.player_y) <= hit_radius
 
     def __encode_state(self, agent_pos_x, agent_pos_y):
-        state = self.__encode_state_simple(agent_pos_x, agent_pos_y)
+        state = self.__encode_state_complex_ndim(agent_pos_x, agent_pos_y)
         if self.state_stacking > 1:
             self.prev_states.append(state)
             if len(self.prev_states) == self.state_stacking:
@@ -191,11 +191,11 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
         
     def __encode_state_complex_ndim(self, agent_pos_x, agent_pos_y):
         # complex encoding of the whole field (multidimensional)
-        state = [ [ [0.0, 0.0, 0.0] for j in range(self.HEIGHT) ] for i in range(self.WIDTH)]
-        state[agent_pos_y][agent_pos_x][0] = 255
-        state[self.player_y][self.player_x][1] = 255
-        for (x, y) in self.shots: state[y][x][2] = 255
-        for (x, y) in self.walls: state[y][x][2] = 100
+        state = [ [ 0.0 for j in range(self.HEIGHT) ] for i in range(self.WIDTH)]
+        state[agent_pos_y][agent_pos_x] = 1
+        state[self.player_y][self.player_x] = 2
+        for (x, y) in self.shots: state[y][x] = 3
+        for (x, y) in self.walls: state[y][x] = 4
         return state
 
     def __coord_to_idx(self, x: int, y: int):
@@ -215,7 +215,7 @@ if __name__ == "__main__":
                 #tf.keras.layers.Conv2D(64, kernel_size=(4, 4), strides=(2, 2), padding='same', activation="relu"),
                 #tf.keras.layers.MaxPooling2D((2, 2), strides=2),
                 #tf.keras.layers.Conv2D(64, kernel_size=(3, 3), strides=(1, 1), padding='same', activation="relu"),
-                #keras.layers.Flatten(),
+                keras.layers.Flatten(),
                 #keras.layers.Dense(64, activation="elu", kernel_initializer='random_normal', bias_initializer='random_normal'),
                 keras.layers.Dense(32, activation="elu", kernel_initializer='random_normal', bias_initializer='random_normal'),
                 keras.layers.Dense(32, activation="elu", kernel_initializer='random_normal', bias_initializer='random_normal'),
