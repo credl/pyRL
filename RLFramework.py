@@ -186,6 +186,7 @@ class RLTrainer:
         return self.additional_stats
         
     def get_network_stats(self):
+        print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
         s = ""
         s +=  "Layer shapes: " + " ".join([str(l.output_shape) for l in self.dqn_q.layers]) + "\n"
         if "CUDA_VISIBLE_DEVICES" in os.environ.keys(): s +=    "CUDA: " + os.environ['CUDA_VISIBLE_DEVICES']
