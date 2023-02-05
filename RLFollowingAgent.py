@@ -5,7 +5,7 @@ import numpy as np
 
 cons = MyConsole.MyConsole()
 
-class FollowingEnvironment(RLFramework.RLEnvironment):
+class ChasingEnvironment(RLFramework.RLEnvironment):
     AC_LEFT: int = 0; AC_RIGHT: int = 1; AC_UP: int = 2; AC_DOWN: int = 3; AC_SHOOT: int = 4
     WIDTH: int = 50; HEIGHT: int = 50
     agent_x: int = 0; agent_y: int = 0; player_x: int = 0; player_y: int = 0
@@ -113,8 +113,8 @@ class FollowingEnvironment(RLFramework.RLEnvironment):
         return y * self.WIDTH + x
 
 if __name__ == "__main__":
-    env = FollowingEnvironment()
-    tr = RLFramework.RLTrainer(env, visualize_interval=1, load_path="./RLFollowingAgent_trained.h5", save_path="./RLFollowingAgent_trained.h5", save_interval=10)
+    env = ChasingEnvironment()
+    tr = RLFramework.RLTrainer(env, visualize_interval=1, load_path="./RLChasingAgent_trained.h5", save_path="./RLChasingAgent_trained.h5", save_interval=10)
     tr.get_action(env.get_state())
     print("Network stats:\n"  + tr.get_network_stats())
     cons.myprint("Network stats:\n" + tr.get_network_stats())
