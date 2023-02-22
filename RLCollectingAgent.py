@@ -1,3 +1,4 @@
+import keras
 import RLFramework
 import MyConsole
 import itertools
@@ -114,24 +115,26 @@ class CollectingEnvironment(RLFramework.RLEnvironment):
     
     def __encode_state_complex_1dim(self):
         # complex encoding of the whole field
-        state = [0] * self.WIDTH * self.HEIGHT
-        state[self.__coord_to_idx(self.agent_x, self.agent_y)] = 1
-        state[self.__coord_to_idx(self.coin_x, self.coin_y)] = 2
-        state[self.__coord_to_idx(self.key_x, self.key_y)] = 3
-        state[self.__coord_to_idx(self.lock_x, self.lock_y)] = 4
+        state = [ [0.0, 0.0, 0.0, 0.0, 0.0] for j in range(self.HEIGHT * self.WIDTH)]
+        state[self.__coord_to_idx(self.agent_x, self.agent_y)][0] = 1.0
+        if self.spawn_complex_objects:
+            state[self.__coord_to_idx(self.coin_x, self.coin_y)][1] = 1.0
+            state[self.__coord_to_idx(self.key_x, self.key_y)][2] = 1.0
+            state[self.__coord_to_idx(self.lock_x, self.lock_y)][3] = 1.0
         for (x,y) in self.points:
-            state[self.__coord_to_idx(x,y)] = 5
+            state[self.__coord_to_idx(x,y)][4] = 1.0
         return state
         
     def __encode_state_complex_ndim(self):
         # complex encoding of the whole field (multidimensional)
-        state = [ [ 0.0 for j in range(self.HEIGHT) ] for i in range(self.WIDTH)]
-        state[self.agent_y][self.agent_x] = 1
-        state[self.coin_y][self.coin_x] = 2
-        state[self.key_y][self.key_x] = 3
-        state[self.lock_y][self.lock_x] = 4
+        state = [ [ [0.0, 0.0, 0.0, 0.0, 0.0] for j in range(self.HEIGHT) ] for i in range(self.WIDTH)]
+        state[self.agent_y][self.agent_x][0] = 1.0
+        if self.spawn_complex_objects:
+            state[self.coin_y][self.coin_x][1] = 1.0
+            state[self.key_y][self.key_x][2] = 1.0
+            state[self.lock_y][self.lock_x][3] = 1.0
         for (x,y) in self.points:
-            state[self.__coord_to_idx(x,y)] = 5
+            state[y][x][4] = 1.0
         return state
 
 
@@ -140,7 +143,13 @@ class CollectingEnvironment(RLFramework.RLEnvironment):
 
 if __name__ == "__main__":
     env = CollectingEnvironment()
-    tr = RLFramework.RLTrainer(env, visualize_interval=1, load_path="./RLChasingAgent_trained.h5", save_path="./RLChasingAgent_trained.h5", save_interval=10)
+    net = keras.models.Sequential([
+                keras.layers.Flatten(),
+                keras.layers.Dense(32, activation="relu", kernel_initializer='random_normal', bias_initializer='random_normal'),
+                keras.layers.Dense(32, activation="relu", kernel_initializer='random_normal', bias_initializer='random_normal'),
+                keras.layers.Dense(env.get_action_dim(), activation="linear", kernel_initializer='random_normal', bias_initializer='random_normal')
+            ])
+    tr = RLFramework.RLTrainer(env, nn=net, visualize_interval=1, load_path="./RLCollectingAgent_trained.h5", save_path="./RLCollectingAgent_trained.h5", save_interval=10)
     tr.get_action(env.get_state())
     print("Network stats:\n"  + tr.get_network_stats())
     cons.myprint("Network stats:\n" + tr.get_network_stats())
