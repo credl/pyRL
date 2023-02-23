@@ -138,7 +138,6 @@ class CollectingEnvironment(RLFramework.RLEnvironment):
         # simple encoding of just agent and player positions
         return self.__encode_state_complex_ndim()
 
-
     def __encode_state_simple(self):
         # simple encoding of just agent and player positions
         return [self.lastaction, self.agent_x, self.agent_y, self.coin_x, self.coin_y, self.key_x, self.key_y, self.lock_x, self.lock_y]
