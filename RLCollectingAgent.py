@@ -7,10 +7,12 @@ import numpy as np
 cons = MyConsole.MyConsole()
 
 class CollectingEnvironment(RLFramework.RLEnvironment):
+    inpkey = 0
     AC_LEFT: int = 0; AC_RIGHT: int = 1; AC_UP: int = 2; AC_DOWN: int = 3; AC_SHOOT: int = 4
     WIDTH: int = 25; HEIGHT: int = 25
     agent_x: int = 0; agent_y: int = 0; key_x: int = -1; key_y: int = -1; lock_x = -1; lock_y = -1; coin_x = -1; coin_y = -1
-    spawn_complex_objects = False
+    lastaction: int = 0
+    spawn_complex_objects = True
     resetcoin_steps = 1000
     coincounter = 0
     points = []
@@ -34,7 +36,8 @@ class CollectingEnvironment(RLFramework.RLEnvironment):
 
     def spawn_objects(self):
         if self.spawn_complex_objects:
-            self.coincounter += 1
+            if self.resetcoin_steps >= 0:
+                self.coincounter += 1
             if self.coincounter >= self.resetcoin_steps or (self.coin_x == -1 and self.coin_y == -1):
                 self.coin_x = np.random.choice(self.WIDTH)
                 self.coin_y = np.random.choice(self.HEIGHT)
@@ -87,6 +90,7 @@ class CollectingEnvironment(RLFramework.RLEnvironment):
             self.points.remove((self.agent_x, self.agent_y))
         # changes to the environment other than agent action
         self.spawn_objects()
+        self.lastaction = action
         return (self.get_state(), reward)
 
     def get_state(self):
@@ -110,9 +114,18 @@ class CollectingEnvironment(RLFramework.RLEnvironment):
         cons.erase()
         cons.myprint("Current state:\n" + cons.matrix_to_string(out) + rlframework.get_stats())
         cons.refresh()
+        
+        self.inpkey = cons.getch()
+        if self.inpkey == ord('e'):
+            if rlframework.exploration_rate > rlframework.SETTING_exploration_rate_min:
+                rlframework.exploration_rate = 0
+            else:
+                rlframework.exploration_rate = rlframework.SETTING_exploration_rate_start
+        if self.inpkey == ord('l'):
+            rlframework.learn = not rlframework.learn
 
     def abort(self):
-        return (cons.getch() == 27) # 'escape' key
+        return (self.inpkey == 27) # 'escape' key
 
     def __action_to_char(self, action):
         if action == self.AC_LEFT:      return "<"
@@ -123,12 +136,12 @@ class CollectingEnvironment(RLFramework.RLEnvironment):
 
     def __encode_state(self):
         # simple encoding of just agent and player positions
-        return self.__encode_state_complex_1dim()
+        return self.__encode_state_complex_ndim()
 
 
     def __encode_state_simple(self):
         # simple encoding of just agent and player positions
-        return [self.agent_x, self.agent_y, self.coin_x, self.coin_y, self.key_x, self.key_y, self.lock_x, self.lock_y]
+        return [self.lastaction, self.agent_x, self.agent_y, self.coin_x, self.coin_y, self.key_x, self.key_y, self.lock_x, self.lock_y]
     
     def __encode_state_complex_1dim(self):
         # complex encoding of the whole field
@@ -173,7 +186,7 @@ if __name__ == "__main__":
                 keras.layers.Dense(10, activation="relu", kernel_initializer='random_normal', bias_initializer='random_normal'),
                 keras.layers.Dense(env.get_action_dim(), activation="linear", kernel_initializer='random_normal', bias_initializer='random_normal')
             ])
-    tr = RLFramework.RLTrainer(env, nn=net, visualize_interval=1, load_path="./RLCollectingAgent_trained.h5", save_path="./RLCollectingAgent_trained.h5", save_interval=10, gamma_discout_factor=0.3, nn_learning_rate=0.1)
+    tr = RLFramework.RLTrainer(env, nn=net, visualize_interval=1, load_path="./RLCollectingAgent_trained.h5", save_path="./RLCollectingAgent_trained.h5", exploration_rate_start=0.99, save_interval=10, gamma_discout_factor=0.3, nn_learning_rate=0.1)
     tr.get_action(env.get_state())
     print("Network stats:\n"  + tr.get_network_stats())
     cons.myprint("Network stats:\n" + tr.get_network_stats())

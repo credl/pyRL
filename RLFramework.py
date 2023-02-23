@@ -24,6 +24,7 @@ class RLTrainer:
     additional_stats = ""   # statistics output other than provided by tf
     start_times = dict()    # benchmarking
     sum_times = dict()      # benchmarking
+    learn = True            # enable learning
 
     # settings
     #    nn learning
@@ -148,6 +149,7 @@ class RLTrainer:
         # loop training episodes
         step = 0; self.__start_time("q_learn_loop")
         while (not step == episodes) and (not self.env.abort()):
+            self.__log_bm("Cur. expl. rate", self.__format_float(self.exploration_rate))
             self.__log_bm("DQL loop", self.__format_list(self.__end_time("q_learn_loop")))
             self.__log_bm("Steps simulated", str(step))
             self.__start_time("q_learn_loop")
@@ -161,7 +163,8 @@ class RLTrainer:
             # training
             if step % self.SETTING_training_interval == 0:
                 self.__start_time("ov_ql")
-                self.__train_network(replay_buffer)
+                if self.learn:
+                    self.__train_network(replay_buffer)
                 self.__log_bm("Loss", self.__format_float(self.nn_stats.history['loss'][0], precision=5))
                 self.__log_bm("Overall QL", self.__format_list(self.__end_time("ov_ql")))
                 self.__log_bm("Overall QL(%Loop)", self.__format_float(self.__get_time_percentage("ov_ql", "q_learn_loop")))               
@@ -213,9 +216,10 @@ class RLTrainer:
         # choose action (possibly by random with some probability that decreases over time)
         if np.random.rand() < self.exploration_rate:    action = np.random.choice(self.env.get_action_dim())
         else:                                           action = np.argmax(q_values)
-        self.exploration_rate -= self.SETTING_exploration_rate_decrease
-        if self.exploration_rate < self.SETTING_exploration_rate_min:
-            self.exploration_rate = self.SETTING_exploration_rate_min
+        if self.exploration_rate > self.SETTING_exploration_rate_min:
+            self.exploration_rate -= self.SETTING_exploration_rate_decrease
+            if self.exploration_rate < self.SETTING_exploration_rate_min:
+                self.exploration_rate = self.SETTING_exploration_rate_min
         return action
 
     def __train_network(self, replay_buffer):
