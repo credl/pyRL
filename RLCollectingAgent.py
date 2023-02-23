@@ -12,7 +12,7 @@ class CollectingEnvironment(RLFramework.RLEnvironment):
     WIDTH: int = 25; HEIGHT: int = 25
     agent_x: int = 0; agent_y: int = 0; key_x: int = -1; key_y: int = -1; lock_x = -1; lock_y = -1; coin_x = -1; coin_y = -1
     lastaction: int = 0
-    spawn_complex_objects = True
+    spawn_complex_objects = False
     resetcoin_steps = 1000
     coincounter = 0
     points = []
