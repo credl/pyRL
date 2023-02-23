@@ -56,7 +56,7 @@ class CollectingEnvironment(RLFramework.RLEnvironment):
         self.prevac += [action, ]
         if len(self.prevac) > self.nr_prevac:
             self.prevac = self.prevac[1:]
-        reward -= sum(1 if self.prevac[i] != self.prevac[i + 1] else 0 for i in range(len(self.prevac) - 1))
+#        reward -= sum(1 if self.prevac[i] != self.prevac[i + 1] else 0 for i in range(len(self.prevac) - 1))
         # compute reward for bumping into walls
         if action == self.AC_LEFT and self.agent_x == 0:
             reward -= 10
@@ -86,8 +86,11 @@ class CollectingEnvironment(RLFramework.RLEnvironment):
                 self.lock_x = -1
                 self.lock_y = -1
         if (self.agent_x, self.agent_y) in self.points:
-            reward += 5
+            #reward += 5
             self.points.remove((self.agent_x, self.agent_y))
+        #reward = -(abs(self.agent_x - self.WIDTH / 2) + abs(self.agent_y - self.HEIGHT / 2))
+        reward += (10 if action == self.lastaction else 0)
+        #reward = -10 if self.agent_x < 10 or self.agent_x > 40 or self.agent_y < 10 or self.agent_y > 40 else reward
         # changes to the environment other than agent action
         self.spawn_objects()
         self.lastaction = action
@@ -136,11 +139,11 @@ class CollectingEnvironment(RLFramework.RLEnvironment):
 
     def __encode_state(self):
         # simple encoding of just agent and player positions
-        return self.__encode_state_complex_ndim()
+        return self.__encode_state_simple()
 
     def __encode_state_simple(self):
         # simple encoding of just agent and player positions
-        return [self.lastaction, self.agent_x, self.agent_y, self.coin_x, self.coin_y, self.key_x, self.key_y, self.lock_x, self.lock_y]
+        return [self.lastaction, self.agent_x, self.agent_y] #, self.coin_x, self.coin_y, self.key_x, self.key_y, self.lock_x, self.lock_y]
     
     def __encode_state_complex_1dim(self):
         # complex encoding of the whole field
@@ -181,11 +184,10 @@ if __name__ == "__main__":
 #                keras.layers.Dense(env.get_action_dim(), activation="linear", kernel_initializer='random_normal', bias_initializer='random_normal')
 
                 keras.layers.Flatten(),
-                keras.layers.Dense(10, activation="relu", kernel_initializer='random_normal', bias_initializer='random_normal'),
-                keras.layers.Dense(10, activation="relu", kernel_initializer='random_normal', bias_initializer='random_normal'),
+                keras.layers.Dense(5, activation="relu", kernel_initializer='random_normal', bias_initializer='random_normal'),
                 keras.layers.Dense(env.get_action_dim(), activation="linear", kernel_initializer='random_normal', bias_initializer='random_normal')
             ])
-    tr = RLFramework.RLTrainer(env, nn=net, visualize_interval=1, load_path="./RLCollectingAgent_trained.h5", save_path="./RLCollectingAgent_trained.h5", exploration_rate_start=0.99, save_interval=10, gamma_discout_factor=0.3, nn_learning_rate=0.1)
+    tr = RLFramework.RLTrainer(env, nn=net, visualize_interval=1, load_path="./RLCollectingAgent_trained.h5", save_path="./RLCollectingAgent_trained.h5", exploration_rate_start=0.99, save_interval=10, gamma_discout_factor=0.0, nn_learning_rate=0.2, replay_buffer_size=500, sample_size=128, accept_q_network_interval=1)
     tr.get_action(env.get_state())
     print("Network stats:\n"  + tr.get_network_stats())
     cons.myprint("Network stats:\n" + tr.get_network_stats())

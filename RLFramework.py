@@ -172,8 +172,12 @@ class RLTrainer:
             # stats update and visualization
             self.__start_time("nn_query")
             q_values = self.dqn_q(tf.constant([state]))[0].numpy()
+            q_values_t = self.dqn_t(tf.constant([state]))[0].numpy()
+#            self.__log_bm("Net weights", str(self.dqn_q.get_weights()))
             self.__end_time("nn_query")
-            self.__log_bm("Q values", str(self.__format_list(q_values, precision=3, precomma=5)))
+            self.__log_bm("Current state", str(state))
+            self.__log_bm("Q values Q net", str(self.__format_list(q_values, precision=3, precomma=5)))
+            self.__log_bm("Q values T net", str(self.__format_list(q_values_t, precision=3, precomma=5)))
             self.__log_bm("Best action", str(np.argmax(q_values)))
             self.__start_time("save")
             if (not self.SETTING_save_path == None) and (step % self.SETTING_save_interval == 0): self.dqn_t.save_weights(self.SETTING_save_path, overwrite=True, save_format=None, options=None)
