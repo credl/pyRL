@@ -159,6 +159,8 @@ class RLTrainer:
             action = self.__choose_action(state)
             (succ_state, reward) = self.env.next(action)
             # store current observation in replay buffer and do training
+            while len(replay_buffer) >= self.SETTING_replay_buffer_size:
+                del replay_buffer[random.randint(0, len(replay_buffer) - 1)]
             replay_buffer.append([state, action, succ_state, reward])
             # training
             if step % self.SETTING_training_interval == 0:
@@ -175,7 +177,8 @@ class RLTrainer:
             q_values_t = self.dqn_t(tf.constant([state]))[0].numpy()
 #            self.__log_bm("Net weights", str(self.dqn_q.get_weights()))
             self.__end_time("nn_query")
-            self.__log_bm("Current state", str(state))
+            self.__log_bm("Current reward", str(reward))
+#            self.__log_bm("Current state", str(state))
             self.__log_bm("Q values Q net", str(self.__format_list(q_values, precision=3, precomma=5)))
             self.__log_bm("Q values T net", str(self.__format_list(q_values_t, precision=3, precomma=5)))
             self.__log_bm("Best action", str(np.argmax(q_values)))
@@ -234,7 +237,9 @@ class RLTrainer:
         all_states_q_values = self.dqn_q(all_states)                                                                                                            # get q values (current network output) for whole training set
         max_q_values_succ_states = tf.reduce_max(self.dqn_t(all_succ_states), axis=1)                                                                           # get maximum q values for all successor states
         self.__end_time("nn_query")
-        all_rewards += self.SETTING_gamma_discout_factor * max_q_values_succ_states                                                                             # add discounted future rewards
+        all_future_rewards = self.SETTING_gamma_discout_factor * max_q_values_succ_states                                                                       # add discounted future rewards
+#        all_rewards += all_future_rewards
+        all_rewards = tf.constant([ max(a, b) for a, b in zip(all_rewards.numpy().tolist(), all_future_rewards.numpy().tolist()) ])
         all_rewards_matrix = all_rewards.numpy().repeat(self.env.get_action_dim()).reshape(-1, self.env.get_action_dim())                                       # transform rewards vector into matrix (add a separate copy of the vector for each action)
         all_states_updated_q_values = all_states_q_values + self.SETTING_alpha_q_learning_rate * (all_rewards_matrix - all_states_q_values) * all_action_masks  # update q values **only** for chosen actions (using the action mask)
         # train network
