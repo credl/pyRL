@@ -58,14 +58,14 @@ class CollectingEnvironment(RLFramework.RLEnvironment):
             self.prevac = self.prevac[1:]
 #        reward -= sum(1 if self.prevac[i] != self.prevac[i + 1] else 0 for i in range(len(self.prevac) - 1))
         # compute reward for bumping into walls
-        if action == self.AC_LEFT and self.agent_x == 0:
-            reward -= 10
-        if action == self.AC_RIGHT and self.agent_x == self.WIDTH - 1:
-            reward -= 10
-        if action == self.AC_UP and self.agent_y == 0:
-            reward -= 10
-        if action == self.AC_DOWN and self.agent_y == self.HEIGHT - 1:
-            reward -= 10
+        #if action == self.AC_LEFT and self.agent_x == 0:
+        #    reward -= 10
+        #if action == self.AC_RIGHT and self.agent_x == self.WIDTH - 1:
+        #    reward -= 10
+        #if action == self.AC_UP and self.agent_y == 0:
+        #    reward -= 10
+        #if action == self.AC_DOWN and self.agent_y == self.HEIGHT - 1:
+        #    reward -= 10
         # compute next state
         if action == self.AC_LEFT:      self.agent_x = max(self.agent_x - 1, 0)
         elif action == self.AC_RIGHT:   self.agent_x = min(self.agent_x + 1, self.WIDTH - 1)
@@ -89,8 +89,8 @@ class CollectingEnvironment(RLFramework.RLEnvironment):
             #reward += 10
             self.points.remove((self.agent_x, self.agent_y))
         # stay in center
-        #reward = (self.WIDTH * 0.75 - abs(self.agent_x - self.WIDTH / 4)) + (self.HEIGHT * 0.75 - abs(self.agent_y - self.HEIGHT / 4))
-        reward += (5 if action == self.lastaction else -5)
+        reward = (self.WIDTH * 0.75 - abs(self.agent_x - self.WIDTH / 4)) + (self.HEIGHT * 0.75 - abs(self.agent_y - self.HEIGHT / 4))
+        #reward += (5 if action == self.lastaction else -5)
         #reward = -10 if self.agent_x < 10 or self.agent_x > 40 or self.agent_y < 10 or self.agent_y > 40 else reward
         # changes to the environment other than agent action
         self.spawn_objects()
