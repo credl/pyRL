@@ -45,6 +45,7 @@ class RLTrainer:
     SETTING_random_state_change_probability_min: float = 0.0,
     SETTING_random_state_change_probability_decrease: float = 0.0,
     # other
+    SETTING_visualize_start: int = 1
     SETTING_visualize_interval: int = 1
     # model load and save
     SETTING_save_interval = -1
@@ -77,6 +78,7 @@ class RLTrainer:
                     save_path: str = None,
                     load_path: str = None,
                     # other
+                    visualize_start: int = 1,
                     visualize_interval: int = 1
                     ):
         self.env = env
@@ -96,6 +98,7 @@ class RLTrainer:
         self.SETTING_random_state_change_probability_start = random_state_change_probability_start
         self.SETTING_random_state_change_probability_decrease = random_state_change_probability_decrease
         self.SETTING_random_state_change_probability_min = random_state_change_probability_min
+        self.SETTING_visualize_start = visualize_start
         self.SETTING_visualize_interval = visualize_interval
         self.SETTING_save_interval = save_interval
         self.SETTING_save_path = save_path
@@ -157,11 +160,17 @@ class RLTrainer:
             self.__state_randomization()
             # choose and apply action to current state
             action = self.__choose_action(state)
-            (succ_state, reward) = self.env.next(action)
+            ret = self.env.next(action)
+            if len(ret) == 2:
+                (succ_state, reward) = ret
+                finished = False
+            else:
+                (succ_state, reward, finished) = ret
+            # random removal (rather than first one)
+            #while len(replay_buffer) >= self.SETTING_replay_buffer_size:
+            #    del replay_buffer[random.randint(0, len(replay_buffer) - 1)]
             # store current observation in replay buffer and do training
-            while len(replay_buffer) >= self.SETTING_replay_buffer_size:
-                del replay_buffer[random.randint(0, len(replay_buffer) - 1)]
-            replay_buffer.append([state, action, succ_state, reward])
+            replay_buffer.append([state, action, succ_state, reward, 0 if finished else 1])
             # training
             if step % self.SETTING_training_interval == 0:
                 self.__start_time("ov_ql")
@@ -178,6 +187,7 @@ class RLTrainer:
 #            self.__log_bm("Net weights", str(self.dqn_q.get_weights()))
             self.__end_time("nn_query")
             self.__log_bm("Current reward", str(reward))
+            self.__log_bm("Current finished", str(finished))
 #            self.__log_bm("Current state", str(state))
             self.__log_bm("Q values Q net", str(self.__format_list(q_values, precision=3, precomma=5)))
             self.__log_bm("Q values T net", str(self.__format_list(q_values_t, precision=3, precomma=5)))
@@ -187,7 +197,9 @@ class RLTrainer:
             self.__log_bm("Model save", self.__format_list(self.__end_time("save")))
             self.__start_time("viz")
             self.__log_bm("Visualization", self.__format_list(self.__get_time_sum("viz")))
-            if step % self.SETTING_visualize_interval == 0: self.env.visualize(self, step)
+            if step % self.SETTING_visualize_interval == 0:
+                if step > self.SETTING_visualize_start:
+                    self.env.visualize(self, step)
             self.__end_time("viz")
             # prepare next iteration
             state = succ_state; step += 1; self.additional_stats = ""
@@ -231,13 +243,15 @@ class RLTrainer:
 
     def __train_network(self, replay_buffer):
         # draw random training set from replay buffer
-        (all_states, all_action_masks, all_succ_states, all_rewards) = self.__draw_random_sample(replay_buffer, self.SETTING_sample_size)
+        (all_states, all_action_masks, all_succ_states, all_rewards, all_finished) = self.__draw_random_sample(replay_buffer, self.SETTING_sample_size)
+        #print(all_succ_states.numpy().tolist())
+        #quit()
         # compute updated q values for the selected training samples (Bellman Equation)
         self.__start_time("nn_query")
         all_states_q_values = self.dqn_q(all_states)                                                                                                            # get q values (current network output) for whole training set
         max_q_values_succ_states = tf.reduce_max(self.dqn_t(all_succ_states), axis=1)                                                                           # get maximum q values for all successor states
         self.__end_time("nn_query")
-        all_future_rewards = self.SETTING_gamma_discout_factor * max_q_values_succ_states                                                                       # add discounted future rewards
+        all_future_rewards = self.SETTING_gamma_discout_factor * max_q_values_succ_states * all_finished                                                        # add discounted future rewards
 #        all_rewards += all_future_rewards
         all_rewards = tf.constant([ max(a, b) for a, b in zip(all_rewards.numpy().tolist(), all_future_rewards.numpy().tolist()) ])
         all_rewards_matrix = all_rewards.numpy().repeat(self.env.get_action_dim()).reshape(-1, self.env.get_action_dim())                                       # transform rewards vector into matrix (add a separate copy of the vector for each action)
@@ -257,7 +271,8 @@ class RLTrainer:
         all_action_masks    = tf.constant([ tf.one_hot(replay_buffer[sample_idx][1], self.env.get_action_dim()).numpy() for sample_idx in trainingset_indexes ])
         all_succ_states     = tf.constant([ replay_buffer[sample_idx][2] for sample_idx in trainingset_indexes ])
         all_rewards         = tf.constant([ replay_buffer[sample_idx][3] for sample_idx in trainingset_indexes ], dtype=tf.float32)
-        return (all_states, all_action_masks, all_succ_states, all_rewards)
+        all_finished        = tf.constant([ replay_buffer[sample_idx][4] for sample_idx in trainingset_indexes ], dtype=tf.float32)
+        return (all_states, all_action_masks, all_succ_states, all_rewards, all_finished)
 
 
     # ### Logging and Output ###
