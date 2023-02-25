@@ -16,7 +16,7 @@ class CollectingEnvironment(RLFramework.RLEnvironment):
     resetcoin_steps = 1000
     coincounter = 0
     points = []
-    pointcount = 100
+    pointcount = 0
     prevac = []
     nr_prevac = 20
     nn_dec = None
@@ -58,14 +58,14 @@ class CollectingEnvironment(RLFramework.RLEnvironment):
             self.prevac = self.prevac[1:]
 #        reward -= sum(1 if self.prevac[i] != self.prevac[i + 1] else 0 for i in range(len(self.prevac) - 1))
         # compute reward for bumping into walls
-        #if action == self.AC_LEFT and self.agent_x == 0:
-        #    reward -= 10
-        #if action == self.AC_RIGHT and self.agent_x == self.WIDTH - 1:
-        #    reward -= 10
-        #if action == self.AC_UP and self.agent_y == 0:
-        #    reward -= 10
-        #if action == self.AC_DOWN and self.agent_y == self.HEIGHT - 1:
-        #    reward -= 10
+        if action == self.AC_LEFT and self.agent_x == 0:
+            reward -= 10
+        if action == self.AC_RIGHT and self.agent_x == self.WIDTH - 1:
+            reward -= 10
+        if action == self.AC_UP and self.agent_y == 0:
+            reward -= 10
+        if action == self.AC_DOWN and self.agent_y == self.HEIGHT - 1:
+            reward -= 10
         # compute next state
         if action == self.AC_LEFT:      self.agent_x = max(self.agent_x - 1, 0)
         elif action == self.AC_RIGHT:   self.agent_x = min(self.agent_x + 1, self.WIDTH - 1)
@@ -73,24 +73,24 @@ class CollectingEnvironment(RLFramework.RLEnvironment):
         elif action == self.AC_DOWN:    self.agent_y = min(self.agent_y + 1, self.HEIGHT - 1)
         # compute reward for collecting objects
         if self.spawn_complex_objects:
-            if abs(self.agent_x - self.coin_x) < 10 and abs(self.agent_y - self.coin_y) < 10:
+            if self.coin_x != -1 and self.coin_y != -1 and abs(self.agent_x - self.coin_x) < 10 and abs(self.agent_y - self.coin_y) < 10:
                 reward += 20
                 self.coin_x = -1
                 self.coin_y = -1
-            if abs(self.agent_x - self.key_x) < 10 and abs(self.agent_y - self.key_y) < 10:
+            if self.key_x != -1 and self.key_y != -1 and abs(self.agent_x - self.key_x) < 10 and abs(self.agent_y - self.key_y) < 10:
                 reward += 30
                 self.key_x = -1
                 self.key_y = -1
-            if self.key_x == -1 and self.key_y == -1 and abs(self.agent_x - self.lock_x) < 10 and abs(self.agent_y - self.lock_y) < 10:
+            if self.lock_x != -1 and self.lock_y != -1 and self.key_x == -1 and self.key_y == -1 and abs(self.agent_x - self.lock_x) < 10 and abs(self.agent_y - self.lock_y) < 10:
                 reward += 100
                 self.lock_x = -1
                 self.lock_y = -1
         if (self.agent_x, self.agent_y) in self.points:
-            #reward += 5
+            #reward += 10
             self.points.remove((self.agent_x, self.agent_y))
         # stay in center
-        reward = (self.WIDTH / 2 - abs(self.agent_x - self.WIDTH / 2)) + (self.HEIGHT / 2 - abs(self.agent_y - self.HEIGHT / 2))
-        #reward += (10 if action == self.lastaction else 0)
+        #reward = (self.WIDTH * 0.75 - abs(self.agent_x - self.WIDTH / 4)) + (self.HEIGHT * 0.75 - abs(self.agent_y - self.HEIGHT / 4))
+        reward += (5 if action == self.lastaction else -5)
         #reward = -10 if self.agent_x < 10 or self.agent_x > 40 or self.agent_y < 10 or self.agent_y > 40 else reward
         # changes to the environment other than agent action
         self.spawn_objects()
@@ -154,8 +154,8 @@ class CollectingEnvironment(RLFramework.RLEnvironment):
             state[self.__coord_to_idx(self.coin_x, self.coin_y)][1] = 1.0
             state[self.__coord_to_idx(self.key_x, self.key_y)][2] = 1.0
             state[self.__coord_to_idx(self.lock_x, self.lock_y)][3] = 1.0
-        #for (x,y) in self.points:
-        #    state[self.__coord_to_idx(x,y)][4] = 1.0
+        for (x,y) in self.points:
+            state[self.__coord_to_idx(x,y)][4] = 1.0
         return state
         
     def __encode_state_complex_ndim(self):
@@ -166,8 +166,8 @@ class CollectingEnvironment(RLFramework.RLEnvironment):
             state[self.coin_y][self.coin_x][1] = 1.0
             state[self.key_y][self.key_x][2] = 1.0
             state[self.lock_y][self.lock_x][3] = 1.0
-        for (x,y) in self.points:
-            state[y][x][4] = 1.0
+        #for (x,y) in self.points:
+        #    state[y][x][4] = 1.0
         return state
 
 
@@ -178,9 +178,9 @@ if __name__ == "__main__":
     env = CollectingEnvironment()
     net = keras.models.Sequential([
 #                keras.layers.Reshape((env.WIDTH, env.HEIGHT, 5), input_shape=(env.WIDTH, env.HEIGHT, 5)),
-#                keras.layers.Conv2D(32, kernel_size=(8, 8), strides=(4, 4), padding='same', activation="leaky_relu"),
+#                keras.layers.Conv2D(100, kernel_size=(5, 5), strides=(4, 4), padding='same', activation="leaky_relu"),
 #                keras.layers.MaxPooling2D((2, 2), strides=2),
-#                keras.layers.Conv2D(32, kernel_size=(4, 4), strides=(2, 2), padding='same', activation="leaky_relu"),
+#                keras.layers.Conv2D(100, kernel_size=(3, 3), strides=(2, 2), padding='same', activation="leaky_relu"),
 #                keras.layers.Flatten(),
 #                keras.layers.Dense(env.get_action_dim(), activation="linear", kernel_initializer='random_normal', bias_initializer='random_normal')
 
@@ -189,7 +189,7 @@ if __name__ == "__main__":
                 keras.layers.Dense(100, activation="leaky_relu"),
                 keras.layers.Dense(env.get_action_dim())
             ])
-    tr = RLFramework.RLTrainer(env, nn=net, visualize_interval=1, load_path="./RLCollectingAgent_trained.h5", save_path="./RLCollectingAgent_trained.h5", exploration_rate_start=0.99, exploration_rate_decrease=0.01, save_interval=100, gamma_discout_factor=0.15, nn_learning_rate=0.02, replay_buffer_size=2000, sample_size=64, accept_q_network_interval=1)
+    tr = RLFramework.RLTrainer(env, nn=net, visualize_interval=1, load_path="./RLCollectingAgent_trained.h5", save_path="./RLCollectingAgent_trained.h5", exploration_rate_start=0.99, exploration_rate_decrease=0.001, save_interval=100, gamma_discout_factor=0.15, nn_learning_rate=0.02, replay_buffer_size=2000, sample_size=64, accept_q_network_interval=1)
     tr.get_action(env.get_state())
     print("Network stats:\n"  + tr.get_network_stats())
     cons.myprint("Network stats:\n" + tr.get_network_stats())
