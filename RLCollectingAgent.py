@@ -79,7 +79,7 @@ class CollectingEnvironment(RLFramework.RLEnvironment):
         elif action == self.AC_DOWN:    self.agent_y = min(self.agent_y + 1, self.HEIGHT - 1)
         # compute reward for collecting objects
         if self.spawn_complex_objects:
-            if self.enemy_x != -1 and self.enemy_y != -1 and abs(self.agent_x - self.enemy_y) < self.COLL_RADIUS and abs(self.agent_y - self.enemy_y) < self.COLL_RADIUS:
+            if self.enemy_x != -1 and self.enemy_y != -1 and abs(self.agent_x - self.enemy_x) < self.COLL_RADIUS and abs(self.agent_y - self.enemy_y) < self.COLL_RADIUS:
                 reward -= 100
                 finished = True
                 self.enemy_x = -1
