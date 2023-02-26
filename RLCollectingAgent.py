@@ -80,8 +80,8 @@ class CollectingEnvironment(RLFramework.RLEnvironment):
         # compute reward for collecting objects
         if self.spawn_complex_objects:
             if self.enemy_x != -1 and self.enemy_y != -1 and abs(self.agent_x - self.enemy_x) < self.COLL_RADIUS and abs(self.agent_y - self.enemy_y) < self.COLL_RADIUS:
-                reward -= 100
-                finished = True
+                #reward -= 100
+                #finished = True
                 self.enemy_x = -1
                 self.enemy_y = -1
             if self.coin_x != -1 and self.coin_y != -1 and abs(self.agent_x - self.coin_x) < self.COLL_RADIUS and abs(self.agent_y - self.coin_y) < self.COLL_RADIUS:
@@ -166,7 +166,7 @@ class CollectingEnvironment(RLFramework.RLEnvironment):
 
     def __encode_state_simple(self):
         # simple encoding of just agent and player positions
-        return [self.agent_x, self.agent_y, self.coin_x, self.coin_y, self.key_x, self.key_y, self.lock_x, self.lock_y, self.enemy_x, self.enemy_y]
+        return [self.agent_x, self.agent_y, self.coin_x, self.coin_y] #, self.enemy_x, self.enemy_y] #, self.key_x, self.key_y, self.lock_x, self.lock_y]
     
     def __encode_state_complex_1dim(self):
         # complex encoding of the whole field
@@ -214,7 +214,7 @@ if __name__ == "__main__":
                 keras.layers.Dense(20, activation="leaky_relu"),
                 keras.layers.Dense(env.get_action_dim())
             ])
-    tr = RLFramework.RLTrainer(env, nn=net, visualize_interval=1, load_path="./RLCollectingAgent_trained.h5", save_path="./RLCollectingAgent_trained.h5", exploration_rate_start=0.99, exploration_rate_decrease=0.001, save_interval=100, gamma_discout_factor=0.2, nn_learning_rate=0.03, replay_buffer_size=2000, sample_size=64, accept_q_network_interval=1)
+    tr = RLFramework.RLTrainer(env, nn=net, visualize_interval=1, load_path="./RLCollectingAgent_trained.h5", save_path="./RLCollectingAgent_trained.h5", exploration_rate_start=0.99, exploration_rate_decrease=0.0005, save_interval=100, gamma_discout_factor=0.2, nn_learning_rate=0.03, replay_buffer_size=2000, sample_size=64, accept_q_network_interval=1)
     tr.get_action(env.get_state())
     print("Network stats:\n"  + tr.get_network_stats())
     cons.myprint("Network stats:\n" + tr.get_network_stats())
