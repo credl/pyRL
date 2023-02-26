@@ -13,7 +13,7 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
     WIDTH: int = 25; HEIGHT: int = 25
     COLL_RADIUS = 2
     agent_x: int = 0; agent_y: int = 0; coin_x = -1; coin_y = -1
-    snakelen: int = 2
+    snakelen: int = 20
     resetcoin_steps = 1000
     snakeelem = []
     nn_dec = None
@@ -114,7 +114,7 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
 
     def __encode_state(self):
         # simple encoding of just agent and player positions
-        return self.__encode_state_simple()
+        return self.__encode_state_complex_1dim()
 
     def __encode_state_simple(self):
         # simple encoding of just agent and player positions
