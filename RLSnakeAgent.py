@@ -45,7 +45,10 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
         self.snakeelem += [ (self.agent_x, self.agent_y) ]
         # compute next state
         if action != self.AC_NOTHING:
-            self.direction = action
+            if action == self.AC_LEFT and action != self.AC_RIGHT: self.direction = action
+            if action == self.AC_RIGHT and action != self.AC_LEFT: self.direction = action
+            if action == self.AC_UP and action != self.AC_DOWN: self.direction = action
+            if action == self.AC_DOWN and action != self.AC_UP: self.direction = action
         if self.direction == self.AC_LEFT:      self.agent_x -= 1
         elif self.direction == self.AC_RIGHT:   self.agent_x += 1
         elif self.direction == self.AC_UP:      self.agent_y -= 1
