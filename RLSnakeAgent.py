@@ -13,13 +13,16 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
     WIDTH: int = 25; HEIGHT: int = 25
     COLL_RADIUS = 2
     agent_x: int = 0; agent_y: int = 0; coin_x = -1; coin_y = -1
-    snakelen: int = 20
+    snakelen: int = 2
     resetcoin_steps = 1000
     snakeelem = []
     nn_dec = None
     viz_print_density = 5
     viz_nn_update_interval = 1
     overall_rewards = []
+    survived_len = []
+    survived_steps = []
+    step = 0
 
     def __init__(self):
         # set initial state
@@ -33,6 +36,7 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
         return 4
 
     def next(self, action):
+        self.step += 1
         finished = False
         reward = 0
         # move snake
@@ -51,13 +55,13 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
         if (self.agent_x, self.agent_y) in self.snakeelem:
             coll = True
         if coll:
-            self.reward = -1000
+            self.reward = -100
             self.agent_x = -1
             self.agent_y = -1
             finished = True
         # compute reward for collecting coins
         if self.coin_x != -1 and self.coin_y != -1 and abs(self.agent_x - self.coin_x) < self.COLL_RADIUS and abs(self.agent_y - self.coin_y) < self.COLL_RADIUS:
-            reward += 50
+            reward += 100
             finished = True
             self.coin_x = -1
             self.coin_y = -1
@@ -67,7 +71,10 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
             self.agent_x = np.random.choice(self.WIDTH)
             self.agent_y = np.random.choice(self.HEIGHT)
             self.snakeelem = []
+            self.survived_len += [self.snakelen]
+            self.survived_steps += [self.step]
             self.snakelen = 2
+            self.step = 0
         if self.coin_x == -1 and self.coin_y == -1:
             self.coin_x = np.random.choice(self.WIDTH)
             self.coin_y = np.random.choice(self.HEIGHT)
@@ -90,7 +97,11 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
         cons.erase()
         if len(self.overall_rewards) > 100:
             self.overall_rewards = self.overall_rewards[len(self.overall_rewards) - 100:]
-        cons.myprint("Current state:\n" + cons.matrix_to_string(out) + rlframework.get_stats() + "\nRewards in last 100 steps:" + str(sum(self.overall_rewards)) + "\nRewards/steps:" + str(sum(self.overall_rewards) / len(self.overall_rewards)))
+        if len(self.survived_len) > 30:
+            self.survived_len = self.survived_len[len(self.survived_len) - 30:]
+        if len(self.survived_steps) > 30:
+            self.survived_steps = self.survived_steps[len(self.survived_steps) - 30:]
+        cons.myprint("Current state:\n" + cons.matrix_to_string(out) + rlframework.get_stats() + "\nRewards in last 100 steps:" + str(sum(self.overall_rewards)) + "\nRewards/steps:" + str(sum(self.overall_rewards) / len(self.overall_rewards)) + "\nSurvived len:" + str(self.survived_len) + "\nSurvived steps:" + str(self.survived_steps))
         cons.refresh()
         
         self.inpkey = cons.getch()
@@ -114,7 +125,7 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
 
     def __encode_state(self):
         # simple encoding of just agent and player positions
-        return self.__encode_state_complex_1dim()
+        return self.__encode_state_complex_ndim()
 
     def __encode_state_simple(self):
         # simple encoding of just agent and player positions
@@ -154,8 +165,8 @@ if __name__ == "__main__":
 #                keras.layers.Dense(env.get_action_dim(), activation="linear", kernel_initializer='random_normal', bias_initializer='random_normal')
 
                 keras.layers.Flatten(),
-                keras.layers.Dense(20, activation="leaky_relu"),
-                keras.layers.Dense(20, activation="leaky_relu"),
+                keras.layers.Dense(30, activation="leaky_relu"),
+                keras.layers.Dense(30, activation="leaky_relu"),
                 keras.layers.Dense(env.get_action_dim())
             ])
     tr = RLFramework.RLTrainer(env, nn=net, visualize_interval=1, load_path="./RLSnakeAgent_trained.h5", save_path="./RLSnakeAgent_trained.h5", exploration_rate_start=0.99, exploration_rate_decrease=0.0005, save_interval=100, gamma_discout_factor=0.2, nn_learning_rate=0.03, replay_buffer_size=2000, sample_size=64, accept_q_network_interval=1)
