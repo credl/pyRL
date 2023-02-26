@@ -62,7 +62,7 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
         if (self.agent_x, self.agent_y) in self.snakeelem:
             coll = True
         if coll:
-            self.reward = -100
+            reward += -100
             self.agent_x = -1
             self.agent_y = -1
             finished = True
@@ -163,20 +163,20 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
 if __name__ == "__main__":
     env = SnakeEnvironment()
     net = keras.models.Sequential([
-#                keras.layers.Reshape((env.WIDTH, env.HEIGHT, 5), input_shape=(env.WIDTH, env.HEIGHT, 5)),
-#                keras.layers.Conv2D(1, kernel_size=(2, 2), strides=(2, 2), padding='same', activation="leaky_relu"),
-#                keras.layers.MaxPooling2D((1, 1), strides=1),
-#                keras.layers.Flatten(),
-#                keras.layers.Dense(20, activation="leaky_relu"),
-#                keras.layers.Dense(20, activation="leaky_relu"),
-#                keras.layers.Dense(env.get_action_dim(), activation="linear", kernel_initializer='random_normal', bias_initializer='random_normal')
-
+                keras.layers.Reshape((env.WIDTH, env.HEIGHT, 3), input_shape=(env.WIDTH, env.HEIGHT, 3)),
+                keras.layers.Conv2D(1, kernel_size=(2, 2), strides=(2, 2), padding='same', activation="leaky_relu"),
+                keras.layers.MaxPooling2D((1, 1), strides=1),
                 keras.layers.Flatten(),
-                keras.layers.Dense(300, activation="leaky_relu"),
-                keras.layers.Dense(300, activation="leaky_relu"),
-                keras.layers.Dense(env.get_action_dim())
+                keras.layers.Dense(20, activation="leaky_relu"),
+                keras.layers.Dense(20, activation="leaky_relu"),
+                keras.layers.Dense(env.get_action_dim(), activation="linear", kernel_initializer='random_normal', bias_initializer='random_normal')
+
+#                keras.layers.Flatten(),
+#                keras.layers.Dense(300, activation="leaky_relu"),
+#                keras.layers.Dense(300, activation="leaky_relu"),
+#                keras.layers.Dense(env.get_action_dim())
             ])
-    tr = RLFramework.RLTrainer(env, nn=net, visualize_interval=1, load_path="./RLSnakeAgent_trained.h5", save_path="./RLSnakeAgent_trained.h5", exploration_rate_start=0.99, exploration_rate_decrease=0.0005, save_interval=100, gamma_discout_factor=0.2, nn_learning_rate=0.03, replay_buffer_size=2000, sample_size=64, accept_q_network_interval=1)
+    tr = RLFramework.RLTrainer(env, nn=net, visualize_interval=1, load_path="./RLSnakeAgent_trained.h5", save_path="./RLSnakeAgent_trained.h5", exploration_rate_start=0.99, exploration_rate_decrease=0.001, save_interval=100, gamma_discout_factor=0.2, nn_learning_rate=0.03, replay_buffer_size=2000, sample_size=64, accept_q_network_interval=1)
     tr.get_action(env.get_state())
     print("Network stats:\n"  + tr.get_network_stats())
     cons.myprint("Network stats:\n" + tr.get_network_stats())
