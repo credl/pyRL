@@ -124,8 +124,7 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
         # complex encoding of the whole field
         state = [ [0.0, 0.0, 0.0] for j in range(self.HEIGHT * self.WIDTH)]
         state[self.__coord_to_idx(self.agent_x, self.agent_y)][0] = 1.0
-        if self.spawn_complex_objects:
-            state[self.__coord_to_idx(self.coin_x, self.coin_y)][1] = 1.0
+        state[self.__coord_to_idx(self.coin_x, self.coin_y)][1] = 1.0
         for (x,y) in self.snakeelem:
             state[self.__coord_to_idx(x,y)][2] = 1.0
         return state
@@ -134,8 +133,7 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
         # complex encoding of the whole field (multidimensional)
         state = [ [ [0.0, 0.0, 0.0] for j in range(self.HEIGHT) ] for i in range(self.WIDTH)]
         state[self.agent_y][self.agent_x][0] = 1.0
-        if self.spawn_complex_objects:
-            state[self.coin_y][self.coin_x][1] = 1.0
+        state[self.coin_y][self.coin_x][1] = 1.0
         for (x,y) in self.snakeelem:
             state[y][x][2] = 1.0
         return state
