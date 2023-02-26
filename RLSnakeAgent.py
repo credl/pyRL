@@ -8,7 +8,7 @@ cons = MyConsole.MyConsole()
 
 class SnakeEnvironment(RLFramework.RLEnvironment):
     inpkey = 0
-    AC_LEFT: int = 0; AC_RIGHT: int = 1; AC_UP: int = 2; AC_DOWN: int = 3
+    AC_LEFT: int = 0; AC_RIGHT: int = 1; AC_UP: int = 2; AC_DOWN: int = 3; AC_NOTHING = 4
     direction = AC_LEFT
     WIDTH: int = 25; HEIGHT: int = 25
     COLL_RADIUS = 2
@@ -33,7 +33,7 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
         return len(self.__encode_state())
 
     def get_action_dim(self):
-        return 4
+        return 5
 
     def next(self, action):
         self.step += 1
@@ -44,10 +44,12 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
             self.snakeelem = self.snakeelem[1:]
         self.snakeelem += [ (self.agent_x, self.agent_y) ]
         # compute next state
-        if action == self.AC_LEFT:      self.agent_x -= 1
-        elif action == self.AC_RIGHT:   self.agent_x += 1
-        elif action == self.AC_UP:      self.agent_y -= 1
-        elif action == self.AC_DOWN:    self.agent_y += 1
+        if action != self.AC_NOTHING:
+            self.direction = action
+        if self.direction == self.AC_LEFT:      self.agent_x -= 1
+        elif self.direction == self.AC_RIGHT:   self.agent_x += 1
+        elif self.direction == self.AC_UP:      self.agent_y -= 1
+        elif self.direction == self.AC_DOWN:    self.agent_y += 1
         # do not bump into walls or snake
         coll = False
         if self.agent_x < 0 or self.agent_x >= self.WIDTH or self.agent_y < 0 or self.agent_y >= self.HEIGHT:
@@ -129,7 +131,7 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
 
     def __encode_state_simple(self):
         # simple encoding of just agent and player positions
-        return [self.agent_x, self.agent_y, self.coin_x]
+        return [self.agent_x, self.agent_y, self.direction, self.coin_x, self.coin_y]
     
     def __encode_state_complex_1dim(self):
         # complex encoding of the whole field
@@ -165,8 +167,8 @@ if __name__ == "__main__":
 #                keras.layers.Dense(env.get_action_dim(), activation="linear", kernel_initializer='random_normal', bias_initializer='random_normal')
 
                 keras.layers.Flatten(),
-                keras.layers.Dense(30, activation="leaky_relu"),
-                keras.layers.Dense(30, activation="leaky_relu"),
+                keras.layers.Dense(300, activation="leaky_relu"),
+                keras.layers.Dense(300, activation="leaky_relu"),
                 keras.layers.Dense(env.get_action_dim())
             ])
     tr = RLFramework.RLTrainer(env, nn=net, visualize_interval=1, load_path="./RLSnakeAgent_trained.h5", save_path="./RLSnakeAgent_trained.h5", exploration_rate_start=0.99, exploration_rate_decrease=0.0005, save_interval=100, gamma_discout_factor=0.2, nn_learning_rate=0.03, replay_buffer_size=2000, sample_size=64, accept_q_network_interval=1)
