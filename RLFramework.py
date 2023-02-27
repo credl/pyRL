@@ -5,6 +5,7 @@ import time
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
+import gc
 
 class RLEnvironment:
     def get_state_dim(self): return 0                               # number of state dimensions
@@ -36,6 +37,7 @@ class RLTrainer:
     SETTING_alpha_q_learning_rate: float = 0.1,
     SETTING_gamma_discout_factor: float = 0.7,
     SETTING_accept_q_network_interval: int = 1,
+    SETTING_GC_INTERVAL: int = 1000
     #    state space exploration
     SETTING_exploration_rate_start: float = 0.7,
     SETTING_exploration_rate_decrease: float = 0.0001,
@@ -117,7 +119,7 @@ class RLTrainer:
         self.opt = tf.keras.optimizers.Adam(learning_rate=self.SETTING_nn_learning_rate)
         self.dqn_q.compile(self.opt, loss=self.loss_fn)
         if not self.SETTING_load_path == None:
-            self.dqn_q(tf.constant([env.get_state()]))
+            self.dqn_q(tf.convert_to_tensor([env.get_state()]))
             try:
                 self.dqn_q.load_weights(self.SETTING_load_path)
                 print("Loaded model weights from file", self.SETTING_load_path)
@@ -132,13 +134,13 @@ class RLTrainer:
 
     def get_action(self, state):
         self.__start_time("nn_query")
-        ac = np.argmax(self.dqn_q(tf.constant([state]))[0].numpy())
+        ac = np.argmax(self.dqn_q(tf.convert_to_tensor([state]))[0].numpy())
         self.__end_time("nn_query")
         return ac
 
     def get_actions(self, states):
         self.__start_time("nn_query")
-        ac = [ np.argmax(q_values) for q_values in self.dqn_q(tf.constant(states)).numpy()]
+        ac = [ np.argmax(q_values) for q_values in self.dqn_q(tf.convert_to_tensor(states)).numpy()]
         self.__end_time("nn_query")
         return ac
 
@@ -182,8 +184,8 @@ class RLTrainer:
             if step % self.SETTING_accept_q_network_interval == 0: self.dqn_t.set_weights(self.dqn_q.get_weights())
             # stats update and visualization
             self.__start_time("nn_query")
-            q_values = self.dqn_q(tf.constant([state]))[0].numpy()
-            q_values_t = self.dqn_t(tf.constant([state]))[0].numpy()
+            q_values = self.dqn_q(tf.convert_to_tensor([state]))[0].numpy()
+            q_values_t = self.dqn_t(tf.convert_to_tensor([state]))[0].numpy()
 #            self.__log_bm("Net weights", str(self.dqn_q.get_weights()))
             self.__end_time("nn_query")
             self.__log_bm("Current reward", str(reward))
@@ -203,6 +205,9 @@ class RLTrainer:
             self.__end_time("viz")
             # prepare next iteration
             state = succ_state; step += 1; self.additional_stats = ""
+            if step % self.SETTING_GC_INTERVAL == 0:
+                gc.collect()
+                keras.backend.clear_session()
 
     def get_stats(self):
         return self.additional_stats
@@ -230,7 +235,7 @@ class RLTrainer:
     def __choose_action(self, state):
         # estimate q values based on current state
         self.__start_time("nn_query")
-        q_values = self.dqn_q(tf.constant([state]))[0].numpy()
+        q_values = self.dqn_q(tf.convert_to_tensor([state]))[0].numpy()
         self.__end_time("nn_query")
         # choose action (possibly by random with some probability that decreases over time)
         if np.random.rand() < self.exploration_rate:    action = np.random.choice(self.env.get_action_dim())
@@ -264,11 +269,11 @@ class RLTrainer:
     def __draw_random_sample(self, replay_buffer, sample_size):
         trainingset_indexes = random.sample(range(len(replay_buffer)), min(sample_size, len(replay_buffer)))
         # get current q-values (current NN prediction) of selected training samples and update them according to observed reward
-        all_states          = tf.constant([ replay_buffer[sample_idx][0] for sample_idx in trainingset_indexes ])
-        all_action_masks    = tf.constant([ tf.one_hot(replay_buffer[sample_idx][1], self.env.get_action_dim()).numpy() for sample_idx in trainingset_indexes ])
-        all_succ_states     = tf.constant([ replay_buffer[sample_idx][2] for sample_idx in trainingset_indexes ])
-        all_rewards         = tf.constant([ replay_buffer[sample_idx][3] for sample_idx in trainingset_indexes ], dtype=tf.float32)
-        all_finished        = tf.constant([ replay_buffer[sample_idx][4] for sample_idx in trainingset_indexes ], dtype=tf.float32)
+        all_states          = tf.convert_to_tensor([ replay_buffer[sample_idx][0] for sample_idx in trainingset_indexes ])
+        all_action_masks    = tf.convert_to_tensor([ tf.one_hot(replay_buffer[sample_idx][1], self.env.get_action_dim()).numpy() for sample_idx in trainingset_indexes ])
+        all_succ_states     = tf.convert_to_tensor([ replay_buffer[sample_idx][2] for sample_idx in trainingset_indexes ])
+        all_rewards         = tf.convert_to_tensor([ replay_buffer[sample_idx][3] for sample_idx in trainingset_indexes ], dtype=tf.float32)
+        all_finished        = tf.convert_to_tensor([ replay_buffer[sample_idx][4] for sample_idx in trainingset_indexes ], dtype=tf.float32)
         return (all_states, all_action_masks, all_succ_states, all_rewards, all_finished)
 
 
