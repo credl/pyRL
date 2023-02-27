@@ -63,7 +63,7 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
             self.coin_steps = 0
             self.coin_x = -1
             self.coin_y = -1
-            reward -= 1
+            reward -= 50
         # do not bump into walls or snake
         coll = False
         if (self.agent_x, self.agent_y) in self.walls:
