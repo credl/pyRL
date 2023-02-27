@@ -10,7 +10,7 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
     inpkey = 0
     AC_LEFT: int = 0; AC_RIGHT: int = 1; AC_UP: int = 2; AC_DOWN: int = 3; AC_NOTHING = 4
     direction = AC_LEFT
-    WIDTH: int = 25; HEIGHT: int = 25
+    WIDTH: int = 10; HEIGHT: int = 10
     COLL_RADIUS = 2
     agent_x: int = 0; agent_y: int = 0; coin_x = -1; coin_y = -1
     snakelen: int = 2
@@ -191,7 +191,7 @@ if __name__ == "__main__":
 #                keras.layers.Dense(300, activation="leaky_relu"),
 #                keras.layers.Dense(env.get_action_dim())
             ])
-    tr = RLFramework.RLTrainer(env, nn=net, visualize_interval=1, load_path="./RLSnakeAgent_trained.h5", save_path="./RLSnakeAgent_trained.h5", exploration_rate_start=0.99, exploration_rate_decrease=0.001, exploration_rate_min=0.05, save_interval=100, gamma_discout_factor=0.99, nn_learning_rate=0.001, replay_buffer_size=2000, sample_size=64, accept_q_network_interval=1)
+    tr = RLFramework.RLTrainer(env, nn=net, visualize_interval=1, load_path="./RLSnakeAgent_trained.h5", save_path="./RLSnakeAgent_trained.h5", exploration_rate_start=0.99, exploration_rate_decrease=0.001, exploration_rate_min=0.05, save_interval=100, gamma_discout_factor=0.99, nn_learning_rate=0.001, replay_buffer_size=200, sample_size=64, accept_q_network_interval=1)
     tr.get_action(env.get_state())
     print("Network stats:\n"  + tr.get_network_stats())
     cons.myprint("Network stats:\n" + tr.get_network_stats())

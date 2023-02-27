@@ -252,13 +252,12 @@ class RLTrainer:
         max_q_values_succ_states = tf.reduce_max(self.dqn_t(all_succ_states), axis=1)                                                                           # get maximum q values for all successor states
         self.__end_time("nn_query")
         all_future_rewards = self.SETTING_gamma_discout_factor * max_q_values_succ_states * all_finished                                                        # add discounted future rewards
-#        all_rewards += all_future_rewards
-        all_rewards = tf.constant([ max(a, b) for a, b in zip(all_rewards.numpy().tolist(), all_future_rewards.numpy().tolist()) ])
-        all_rewards_matrix = all_rewards.numpy().repeat(self.env.get_action_dim()).reshape(-1, self.env.get_action_dim())                                       # transform rewards vector into matrix (add a separate copy of the vector for each action)
+        all_rewards += all_future_rewards
+        all_rewards_matrix = tf.repeat(tf.reshape(all_rewards, shape=(len(all_rewards), 1)), repeats=[self.env.get_action_dim()], axis=1)
         all_states_updated_q_values = all_states_q_values + self.SETTING_alpha_q_learning_rate * (all_rewards_matrix - all_states_q_values) * all_action_masks  # update q values **only** for chosen actions (using the action mask)
         # train network
         self.__start_time("nn_train")
-        self.nn_stats = self.dqn_q.fit(all_states, tf.constant(all_states_updated_q_values), epochs=self.SETTING_nn_epochs, verbose=0)                          # actual network training
+        self.nn_stats = self.dqn_q.fit(all_states, all_states_updated_q_values, epochs=self.SETTING_nn_epochs, verbose=0)                          # actual network training
         self.__log_bm("NN-Training", self.__format_list(self.__end_time("nn_train")))
         self.__log_bm("NN-Training (%Loop)", self.__format_float(self.__get_time_percentage("nn_train", "q_learn_loop")))
         self.__log_bm("NN-Query", self.__format_list(self.__get_time_sum("nn_query")))
