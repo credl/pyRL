@@ -10,7 +10,7 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
     inpkey = 0
     AC_LEFT: int = 0; AC_RIGHT: int = 1; AC_UP: int = 2; AC_DOWN: int = 3; AC_NOTHING = 4
     direction = AC_LEFT
-    WIDTH: int = 25; HEIGHT: int = 25
+    WIDTH: int = 15; HEIGHT: int = 15
     COLL_RADIUS = 2
     agent_x: int = 0; agent_y: int = 0; coin_x = -1; coin_y = -1
     snakelen: int = 2
