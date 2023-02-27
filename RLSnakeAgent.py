@@ -15,6 +15,7 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
     agent_x: int = 0; agent_y: int = 0; coin_x = -1; coin_y = -1
     snakelen: int = 2
     resetcoin_steps = 1000
+    coin_steps = 0
     snakeelem = []
     nn_dec = None
     viz_print_density = 5
@@ -57,6 +58,12 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
         elif self.direction == self.AC_RIGHT:   self.agent_x += 1
         elif self.direction == self.AC_UP:      self.agent_y -= 1
         elif self.direction == self.AC_DOWN:    self.agent_y += 1
+        self.coin_steps += 1
+        if self.coin_steps >= self.resetcoin_steps:
+            self.coin_steps = 0
+            self.coin_x = -1
+            self.coin_y = -1
+            reward -= 1
         # do not bump into walls or snake
         coll = False
         if (self.agent_x, self.agent_y) in self.walls:
@@ -75,6 +82,7 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
             self.coin_x = -1
             self.coin_y = -1
             self.snakelen += 1
+            self.coin_steps = 0
         self.overall_rewards += [reward]
         if self.agent_x == -1 and self.agent_y == -1:
             self.agent_x = 1 + np.random.choice(self.WIDTH - 2)
