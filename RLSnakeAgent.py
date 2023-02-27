@@ -64,7 +64,7 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
         if (self.agent_x, self.agent_y) in self.snakeelem:
             coll = True
         if coll:
-            reward += self.snakelen * 10 -1000
+            reward += -200
             self.agent_x = -1
             self.agent_y = -1
             finished = True
@@ -144,23 +144,23 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
     def __encode_state_complex_1dim(self):
         # complex encoding of the whole field
         state = [ [0.0, 0.0, 0.0] for j in range(self.HEIGHT * self.WIDTH)]
-        state[self.__coord_to_idx(self.agent_x, self.agent_y)][0] = 1.0
-        state[self.__coord_to_idx(self.coin_x, self.coin_y)][1] = 1.0
+        state[self.__coord_to_idx(self.agent_x, self.agent_y)] = [255, 255, 255]
+        state[self.__coord_to_idx(self.coin_x, self.coin_y)] = [255, 255, 0]
         for (x, y) in self.walls:
-            state[self.__coord_to_idx(x,y)][2] = 1.0
+            state[self.__coord_to_idx(x,y)] = [255, 0, 0]
         for (x,y) in self.snakeelem:
-            state[self.__coord_to_idx(x,y)][2] = 1.0
+            state[self.__coord_to_idx(x,y)] = [0, 255, 255]
         return state
         
     def __encode_state_complex_ndim(self):
         # complex encoding of the whole field (multidimensional)
         state = [ [ [0.0, 0.0, 0.0] for j in range(self.HEIGHT) ] for i in range(self.WIDTH)]
-        state[self.agent_y][self.agent_x][0] = 1.0
-        state[self.coin_y][self.coin_x][1] = 1.0
+        state[self.agent_y][self.agent_x] = [255, 255, 255]
+        state[self.coin_y][self.coin_x] = [255, 255, 0]
         for (x, y) in self.walls:
-            state[x][y][2] = 1.0
+            state[x][y] = [255, 0, 0]
         for (x,y) in self.snakeelem:
-            state[y][x][2] = 1.0
+            state[y][x] = [0, 255, 255]
         return state
 
 
@@ -171,10 +171,11 @@ if __name__ == "__main__":
     env = SnakeEnvironment()
     net = keras.models.Sequential([
                 keras.layers.Reshape((env.WIDTH, env.HEIGHT, 3), input_shape=(env.WIDTH, env.HEIGHT, 3)),
-                keras.layers.Conv2D(10, kernel_size=(2, 2), strides=(1, 1), padding='same', activation="leaky_relu"),
-                keras.layers.MaxPooling2D((1, 1), strides=1),
+                keras.layers.Conv2D(10, 2, 1, padding='same', activation="leaky_relu"),
+#                keras.layers.Conv2D(32, 2, 1, padding='same', activation="relu"),
+#                keras.layers.MaxPooling2D((1, 1), strides=1),
                 keras.layers.Flatten(),
-                keras.layers.Dense(20, activation="leaky_relu"),
+                keras.layers.Dense(10, activation="leaky_relu"),
                 keras.layers.Dense(env.get_action_dim(), activation="linear", kernel_initializer='random_normal', bias_initializer='random_normal')
 
 #                keras.layers.Flatten(),
@@ -182,7 +183,7 @@ if __name__ == "__main__":
 #                keras.layers.Dense(300, activation="leaky_relu"),
 #                keras.layers.Dense(env.get_action_dim())
             ])
-    tr = RLFramework.RLTrainer(env, nn=net, visualize_interval=1, load_path="./RLSnakeAgent_trained.h5", save_path="./RLSnakeAgent_trained.h5", exploration_rate_start=0.99, exploration_rate_decrease=0.001, save_interval=100, gamma_discout_factor=0.3, nn_learning_rate=0.05, replay_buffer_size=2000, sample_size=64, accept_q_network_interval=1)
+    tr = RLFramework.RLTrainer(env, nn=net, visualize_interval=1, load_path="./RLSnakeAgent_trained.h5", save_path="./RLSnakeAgent_trained.h5", exploration_rate_start=0.99, exploration_rate_decrease=0.001, save_interval=100, gamma_discout_factor=0.99, nn_learning_rate=0.001, replay_buffer_size=2000, sample_size=64, accept_q_network_interval=1)
     tr.get_action(env.get_state())
     print("Network stats:\n"  + tr.get_network_stats())
     cons.myprint("Network stats:\n" + tr.get_network_stats())
