@@ -244,8 +244,6 @@ class RLTrainer:
     def __train_network(self, replay_buffer):
         # draw random training set from replay buffer
         (all_states, all_action_masks, all_succ_states, all_rewards, all_finished) = self.__draw_random_sample(replay_buffer, self.SETTING_sample_size)
-        #print(all_succ_states.numpy().tolist())
-        #quit()
         # compute updated q values for the selected training samples (Bellman Equation)
         self.__start_time("nn_query")
         all_states_q_values = self.dqn_q(all_states)                                                                                                            # get q values (current network output) for whole training set
