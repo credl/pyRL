@@ -30,8 +30,16 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
         # set initial state
         self.agent_x = int(self.WIDTH / 2)
         self.agent_y = int(self.HEIGHT / 2)
-        self.walls = [ (x, 0) for x in range(self.WIDTH) ] + [ (x, self.HEIGHT - 1) for x in range(self.WIDTH) ] + [ (0, y) for y in range(self.HEIGHT) ] + [ (self.WIDTH - 1, y) for y in range(self.HEIGHT) ]
-
+        self.walls = [ [False for y in range(self.HEIGHT)] for y in range(self.WIDTH) ]
+        for x in range(self.WIDTH):
+            self.walls[x][0] = True
+            self.walls[x][self.HEIGHT - 1] = True
+        for y in range(self.HEIGHT):
+            self.walls[0][y] = True
+            self.walls[self.WIDTH - 1][y] = True
+        for x in range(3, 6):
+            self.walls[x][5] = True
+            
     def get_state_dim(self):
         return len(self.__encode_state())
 
@@ -64,17 +72,6 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
             self.coin_x = -1
             self.coin_y = -1
             reward -= 50
-        # do not bump into walls or snake
-        coll = False
-        if (self.agent_x, self.agent_y) in self.walls:
-            coll = True
-        if (self.agent_x, self.agent_y) in self.snakeelem:
-            coll = True
-        if coll:
-            reward += -200
-            self.agent_x = -1
-            self.agent_y = -1
-            finished = True
         # compute reward for collecting coins
         if self.coin_x != -1 and self.coin_y != -1 and abs(self.agent_x - self.coin_x) < self.COLL_RADIUS and abs(self.agent_y - self.coin_y) < self.COLL_RADIUS:
             reward += 100
@@ -84,6 +81,17 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
             self.snakelen += 1
             self.coin_steps = 0
         self.overall_rewards += [reward]
+        # do not bump into walls or snake
+        coll = False
+        if self.walls[self.agent_x][self.agent_y]:
+            coll = True
+        if (self.agent_x, self.agent_y) in self.snakeelem:
+            coll = True
+        if coll:
+            reward += -200
+            self.agent_x = -1
+            self.agent_y = -1
+            finished = True
         if self.agent_x == -1 and self.agent_y == -1:
             self.agent_x = 1 + np.random.choice(self.WIDTH - 2)
             self.agent_y = 1 + np.random.choice(self.HEIGHT - 2)
@@ -102,8 +110,10 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
 
     def visualize(self, rlframework, step):
         out = [ [" "] * self.WIDTH for i in range(self.HEIGHT)]
-        for (x, y) in self.walls:
-            out[x][y] = "+"
+        for x in range(self.WIDTH):
+            for y in range(self.HEIGHT):
+                if self.walls[x][y]:
+                    out[y][x] = "+"
         # print agent and player
         # print agent and player
         out[self.agent_y][self.agent_x] = "X"
@@ -154,8 +164,10 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
         state = [ [0.0, 0.0, 0.0] for j in range(self.HEIGHT * self.WIDTH)]
         state[self.__coord_to_idx(self.agent_x, self.agent_y)] = [255, 255, 255]
         state[self.__coord_to_idx(self.coin_x, self.coin_y)] = [255, 255, 0]
-        for (x, y) in self.walls:
-            state[self.__coord_to_idx(x,y)] = [255, 0, 0]
+        for x in range(self.WIDTH):
+            for y in range(self.HEIGHT):
+                if self.walls[x][y]:
+                    state[self.__coord_to_idx(x,y)] = [255, 0, 0]
         for (x,y) in self.snakeelem:
             state[self.__coord_to_idx(x,y)] = [0, 255, 255]
         return state
@@ -165,8 +177,10 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
         state = [ [ [0.0, 0.0, 0.0] for j in range(self.HEIGHT) ] for i in range(self.WIDTH)]
         state[self.agent_y][self.agent_x] = [255, 255, 255]
         state[self.coin_y][self.coin_x] = [255, 255, 0]
-        for (x, y) in self.walls:
-            state[x][y] = [255, 0, 0]
+        for x in range(self.WIDTH):
+            for y in range(self.HEIGHT):
+                if self.walls[x][y]:
+                    state[x][y] = [255, 0, 0]
         for (x,y) in self.snakeelem:
             state[y][x] = [0, 255, 255]
         return state
