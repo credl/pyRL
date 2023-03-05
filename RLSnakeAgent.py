@@ -37,8 +37,8 @@ class SnakeEnvironment(RLFramework.RLEnvironment):
         for y in range(self.HEIGHT):
             self.walls[0][y] = True
             self.walls[self.WIDTH - 1][y] = True
-        for x in range(3, 6):
-            self.walls[x][5] = True
+        #for x in range(3, 6):
+        #    self.walls[x][5] = True
             
     def get_state_dim(self):
         return len(self.__encode_state())
