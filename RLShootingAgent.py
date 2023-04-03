@@ -23,6 +23,7 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
     viz_nn_update_interval = 100
     state_stacking = 1
     prev_states = deque(maxlen=state_stacking)
+    overall_hits = []
 
     def __init__(self):
         # set initial state
@@ -83,7 +84,9 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
         out[self.player_y][self.player_x] = "O"
         # output
         cons.erase()
-        cons.myprint("Current state:\n" + cons.matrix_to_string(out) + rlframework.get_stats())
+        if len(self.overall_hits) > 100:
+            self.overall_hits = self.overall_hits[len(self.overall_hits) - 100:]
+        cons.myprint("Current state:\n" + cons.matrix_to_string(out) + rlframework.get_stats() + "\nHits in last 100 steps: " + str(sum(self.overall_hits)))
         cons.refresh()
 
         self.inpkey = cons.getch()
@@ -164,7 +167,9 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
         else:
             self.last_agent_non_shoot_action = action
         for idx in range(len(self.shots) - 1, -1, -1):
-            if self.__does_hit(idx):
+            hit = self.__does_hit(idx)
+            self.overall_hits += [ 1 if hit else 0 ]
+            if hit:
                 delete = True
                 add_reward += 10
             elif self.shots[idx] in self.walls:
