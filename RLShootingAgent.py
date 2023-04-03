@@ -24,6 +24,7 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
     state_stacking = 1
     prev_states = deque(maxlen=state_stacking)
     overall_hits = []
+    overall_misses = []
 
     def __init__(self):
         # set initial state
@@ -86,7 +87,9 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
         cons.erase()
         if len(self.overall_hits) > 100:
             self.overall_hits = self.overall_hits[len(self.overall_hits) - 100:]
-        cons.myprint("Current state:\n" + cons.matrix_to_string(out) + rlframework.get_stats() + "\nHits in last 100 steps: " + str(sum(self.overall_hits)))
+        if len(self.overall_misses) > 100:
+            self.overall_misses = self.overall_misses[len(self.overall_misses) - 100:]
+        cons.myprint("Current state:\n" + cons.matrix_to_string(out) + rlframework.get_stats() + "\nHits in last 100 steps: " + str(sum(self.overall_hits)) + "\nMisses in last 100 steps: " + str(sum(self.overall_misses)))
         cons.refresh()
 
         self.inpkey = cons.getch()
@@ -166,15 +169,17 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
             add_reward += -1
         else:
             self.last_agent_non_shoot_action = action
+        hits = 0
+        misses = 0
         for idx in range(len(self.shots) - 1, -1, -1):
-            hit = self.__does_hit(idx)
-            self.overall_hits += [ 1 if hit else 0 ]
-            if hit:
+            if self.__does_hit(idx):
                 delete = True
                 add_reward += 10
+                hits += 1
             elif self.shots[idx] in self.walls:
                 add_reward += -2
                 delete = True
+                misses += 1
             else:
                 (x, y) = self.shots[idx]
                 d = self.shotdirs[idx]
@@ -193,6 +198,8 @@ class ShootingEnvironment(RLFramework.RLEnvironment):
                     if y >= self.HEIGHT: delete = True
                 self.shots[idx]= (x, y)
             if delete: del self.shots[idx]; del self.shotdirs[idx]
+        self.overall_hits += [ hits ]
+        self.overall_misses += [ misses ]
         return add_reward
 
     def __does_hit(self, shot_idx):
